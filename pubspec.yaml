@@ -1,0 +1,96 @@
+name: monitor
+description: "A new Flutter project."
+
+publish_to: 'none' 
+
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+
+  camera: ^0.10.0
+  google_mlkit_face_detection: ^0.12.0
+  flutter_local_notifications: ^18.0.1
+  flutter_background_service: ^5.1.0
+  permission_handler: ^11.1.0
+  flutter_overlay_window: ^0.4.5
+  sensors_plus: ^6.1.1
+  google_mlkit_pose_detection: ^0.13.0
+  nsfw_detector_flutter: ^1.0.5
+  fl_chart: ^1.0.0
+  mailer: ^6.5.0
+  provider: ^6.1.5
+  lottie: ^1.4.3
+  flutter_svg: ^2.2.0
+  gif: ^2.3.0
+  supabase_flutter: ^2.15.4
+  menstrual_cycle_widget: ^3.9.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  chewie: ^1.15.0
+  video_player: ^2.14.0
+
+  flutter:
+    sdk: flutter
+
+
+
+  cupertino_icons: ^1.0.8
+
+  monitor_channels:
+    path: ./monitor_channels
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+
+
+
+fonts:
+  - family: Vazirmatn
+    fonts:
+      - asset: assets/fonts/Vazirmatn-Regular.ttf
+      - asset: assets/fonts/Vazirmatn-Bold.ttf
+        weight: 700
+
+
+flutter:
+  assets:
+    - assets/wrist_neck.png
+    - assets/posture.gif
+    - assets/sunny.gif
+    - assets/cloudy.gif
+    - assets/rain.gif
+    - assets/stretch.gif
+    - assets/history.gif
+    - assets/settings.gif
+    - assets/logo_gif.gif
+    - assets/logo.png
+    - assets/pattern_header.png
+    - assets/terme.png
+    - assets/undraw_confirmed_c5lo.png
+    - assets/undraw_personal-information_h7kf.svg
+    - assets/undraw_terms_sx63.svg
+    - assets/undraw_text-messages_978a.svg
+    - assets/undraw_morning-workout_73u9.svg
+    - assets/slouched.png
+    - assets/straight.png
+    - assets/botte.png
+    - assets/botte2.png
+    - assets/botte3.png
+    - assets/eyeComfort.png
+    - assets/meditate.png
+    - assets/backPosture.png
+    - assets/icons/default.png
+    - assets/icons/hunch.png
+    - assets/icons/neck_tilt.png
+    - assets/icons/too_close.png
+    - assets/icons/default.png
+
+  uses-material-design: true
+
