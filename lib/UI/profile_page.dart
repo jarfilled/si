@@ -1,1522 +1,237 @@
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../backend/daily_health_metric.dart';
+import '../backend/health_data_repository.dart';
+import '../services/background_service.dart';
+import 'calibration_screen.dart';
+import 'exercise_center_page.dart';
 import 'settings_page.dart';
 
-import 'calibration_screen.dart';
-
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({Key? key}) : super(key: key);
-
+  const ProfilePage({super.key});
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  static const Color kBg = Color(0xFFFCFCFA);
-  static const Color kCard = Color(0xFFFFFFFF);
-  static const Color kPrimary = Color(0xFF53C8A0);
-  static const Color kPrimaryDark = Color(0xFF2E8D6D);
-  static const Color kMint = Color(0xFFEAF8F1);
-  static const Color kMintSoft = Color(0xFFF3FBF7);
-  static const Color kText = Color(0xFF273632);
-  static const Color kSubtext = Color(0xFF8C9994);
-  static const Color kLine = Color(0xFFEDF1EE);
-  static const Color kShadow = Color(0x12000000);
-  static const Color kWarn = Color(0xFFF0C84D);
-  static const Color kDanger = Color(0xFFF28B82);
+  static const bg = Color(0xFFF4F9F7);
+  static const card = Colors.white;
+  static const green = Color(0xFF42D2A7);
+  static const teal = Color(0xFF45C4D0);
+  static const text = Color(0xFF263B37);
+  static const subtext = Color(0xFF7D8D89);
+  static const mint = Color(0xFFE8F8F1);
+  static const line = Color(0xFFE8EFEC);
+  static const danger = Color(0xFFD95C5C);
 
-  final SupabaseClient _supabase = Supabase.instance.client;
-
-  bool _isLoading = true;
-  bool _isSaving = false;
-
-  String _fullName = '';
-  String _username = '';
-  String _gender = 'male';
-  String _birthDate = '';
-  double _hunchDivisor = 0;
-
-  int _healthScore = 80;
-  int _healthyDays = 0;
-  int _alertsCount = 0;
-  int _healthyBehaviors = 0;
-  int _screenTimeMinutes = 0;
-  int _badPostureMinutes = 0;
-  int _badLightMinutes = 0;
-  int _combinedRiskMinutes = 0;
-  int _eyeBreakCount = 0;
-  int _postureCorrectionCount = 0;
-  bool _darkModeEnabled = false;
-
-  DateTime? _createdAt;
-  DateTime? _lastCalibratedAt;
-  DateTime? _lastActiveAt;
+  final supabase = Supabase.instance.client;
+  bool loading = true;
+  bool saving = false;
+  String fullName = '';
+  String username = '';
+  String gender = 'male';
+  String birthDate = '';
+  DateTime? lastCalibratedAt;
+  double hunchDivisor = 0;
+  DailyHealthMetric? today;
+  String? mood;
 
   @override
-  void initState() {
-    super.initState();
-    _loadUserData();
-  }
+  void initState() { super.initState(); _load(); }
 
-  Future<void> _loadUserData() async {
+  Future<void> _load() async {
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final data = await _supabase.from('users').select().eq('id', user.id).maybeSingle();
-
-      if (!mounted) return;
-
-      if (data == null) {
-        setState(() {
-          _fullName = '';
-          _username = '';
-          _gender = 'male';
-          _birthDate = '';
-          _hunchDivisor = 0;
-          _isLoading = false;
-        });
-        return;
-      }
-
-      setState(() {
-        _fullName = _readString(data['full_name']);
-        _username = _readString(data['username']);
-        _gender = _readString(data['gender'], fallback: 'male');
-        _birthDate = _readString(data['birth_date']);
-        _hunchDivisor = _readDouble(data['hunch_divisor']);
-
-        _healthScore = _readInt(data['health_score'], fallback: 80);
-        _healthyDays = _readInt(data['healthy_days']);
-        _alertsCount = _readInt(data['alerts_count']);
-        _healthyBehaviors = _readInt(data['healthy_behaviors']);
-        _screenTimeMinutes = _readInt(data['screen_time_minutes']);
-        _badPostureMinutes = _readInt(data['bad_posture_minutes']);
-        _badLightMinutes = _readInt(data['bad_light_minutes']);
-        _combinedRiskMinutes = _readInt(data['combined_risk_minutes']);
-        _eyeBreakCount = _readInt(data['eye_break_count']);
-        _postureCorrectionCount = _readInt(data['posture_correction_count']);
-        _darkModeEnabled = data['dark_mode_enabled'] == true;
-
-        _createdAt = _readDateTime(data['created_at']);
-        _lastCalibratedAt = _readDateTime(data['last_calibrated_at']);
-        _lastActiveAt = _readDateTime(data['last_active_at']);
-
-        _isLoading = false;
-      });
-    } catch (e) {
+      final user = supabase.auth.currentUser;
+      if (user == null) { if (mounted) setState(() => loading = false); return; }
+      final results = await Future.wait<dynamic>([
+        supabase.from('users').select().eq('id', user.id).maybeSingle(),
+        HealthDataRepository.instance.getDailyMetrics(days: 1),
+      ]);
+      final data = results[0] as Map<String, dynamic>?;
+      final daily = results[1] as List<Map<String, dynamic>>;
       if (!mounted) return;
       setState(() {
-        _isLoading = false;
+        fullName = _string(data?['full_name']);
+        username = _string(data?['username']);
+        gender = _string(data?['gender'], fallback: 'male');
+        birthDate = _string(data?['birth_date']);
+        hunchDivisor = _number(data?['hunch_divisor']);
+        lastCalibratedAt = _date(data?['last_calibrated_at']);
+        today = daily.isEmpty ? null : DailyHealthMetric.fromMap(daily.first);
+        loading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا در خواندن اطلاعات کاربر: $e')),
-      );
+    } catch (_) {
+      if (mounted) { setState(() => loading = false); _message('اطلاعات حساب بارگذاری نشد.'); }
     }
   }
 
-  Future<void> _updateUserData({
-    required String newFullName,
-    required String newUsername,
-    required String newGender,
-    required String newBirthDate,
-  }) async {
+  String _string(dynamic value, {String fallback = ''}) { final valueString = value?.toString().trim(); return valueString == null || valueString.isEmpty ? fallback : valueString; }
+  double _number(dynamic value) => value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+  DateTime? _date(dynamic value) => value == null ? null : DateTime.tryParse(value.toString());
+
+  int get age {
+    final p = birthDate.replaceAll('/', '-').split('-');
+    if (p.length != 3) return 0;
+    final y = int.tryParse(p[0]); final m = int.tryParse(p[1]); final d = int.tryParse(p[2]);
+    if (y == null || m == null || d == null) return 0;
+    final now = DateTime.now(); var result = now.year - y;
+    if (now.month < m || (now.month == m && now.day < d)) result--;
+    return result < 0 ? 0 : result;
+  }
+
+  String get displayName => fullName.isNotEmpty ? fullName : (username.isNotEmpty ? username : 'کاربر سی');
+
+  Future<void> _editProfile() async {
+    final name = TextEditingController(text: fullName);
+    final userName = TextEditingController(text: username);
+    final birth = TextEditingController(text: birthDate);
+    var selectedGender = gender;
     try {
-      setState(() {
-        _isSaving = true;
-      });
-
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
-        if (!mounted) return;
-        setState(() {
-          _isSaving = false;
-        });
-        return;
-      }
-
-      await _supabase.from('users').update({
-        'full_name': newFullName,
-        'username': newUsername,
-        'gender': newGender,
-        'birth_date': newBirthDate,
-        'last_active_at': DateTime.now().toIso8601String(),
-      }).eq('id', user.id);
-
-      if (!mounted) return;
-
-      setState(() {
-        _fullName = newFullName;
-        _username = newUsername;
-        _gender = newGender;
-        _birthDate = newBirthDate;
-        _lastActiveAt = DateTime.now();
-        _isSaving = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اطلاعات با موفقیت بروزرسانی شد')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isSaving = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا در بروزرسانی اطلاعات: $e')),
-      );
-    }
-  }
-
-  Future<void> _markCalibrationNow() async {
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
-        return;
-      }
-
-      final now = DateTime.now();
-      await _supabase.from('users').update({
-        'last_calibrated_at': now.toIso8601String(),
-        'last_active_at': now.toIso8601String(),
-      }).eq('id', user.id);
-
-      if (!mounted) return;
-      setState(() {
-        _lastCalibratedAt = now;
-        _lastActiveAt = now;
-      });
-    } catch (_) {}
-  }
-
-  int _readInt(dynamic value, {int fallback = 0}) {
-    if (value is int) return value;
-    if (value is double) return value.round();
-    if (value is String) return int.tryParse(value) ?? fallback;
-    return fallback;
-  }
-
-  double _readDouble(dynamic value, {double fallback = 0}) {
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? fallback;
-    return fallback;
-  }
-
-  String _readString(dynamic value, {String fallback = ''}) {
-    if (value == null) return fallback;
-    final text = value.toString().trim();
-    return text.isEmpty ? fallback : text;
-  }
-
-  DateTime? _readDateTime(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is String && value.trim().isNotEmpty) {
-      return DateTime.tryParse(value);
-    }
-    return null;
-  }
-
-  int _calculateAgeFromTextDate(String birthDate) {
-    if (birthDate.trim().isEmpty) return 0;
-
-    final normalized = birthDate.replaceAll('/', '-').trim();
-    final parts = normalized.split('-');
-    if (parts.length != 3) return 0;
-
-    final year = int.tryParse(parts[0]) ?? 0;
-    final month = int.tryParse(parts[1]) ?? 1;
-    final day = int.tryParse(parts[2]) ?? 1;
-    if (year <= 0) return 0;
-
-    final now = DateTime.now();
-    var age = now.year - year;
-    if (now.month < month || (now.month == month && now.day < day)) {
-      age--;
-    }
-    return age < 0 ? 0 : age;
-  }
-
-  int _daysSince(DateTime? date) {
-    if (date == null) return 0;
-    return DateTime.now().difference(date).inDays.clamp(0, 99999);
-  }
-
-  String _formatMinutes(int minutes) {
-    if (minutes <= 0) return '۰د';
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    if (h == 0) return '${_toPersianDigits(m.toString())}د';
-    if (m == 0) return '${_toPersianDigits(h.toString())}س';
-    return '${_toPersianDigits(h.toString())}س ${_toPersianDigits(m.toString())}د';
-  }
-
-  String _formatDateAgo(DateTime? date) {
-    if (date == null) return 'ثبت نشده';
-    final diff = DateTime.now().difference(date);
-    if (diff.inDays > 0) {
-      return '${_toPersianDigits(diff.inDays.toString())} روز پیش';
-    }
-    if (diff.inHours > 0) {
-      return '${_toPersianDigits(diff.inHours.toString())} ساعت پیش';
-    }
-    if (diff.inMinutes > 0) {
-      return '${_toPersianDigits(diff.inMinutes.toString())} دقیقه پیش';
-    }
-    return 'لحظاتی پیش';
-  }
-
-  String _toPersianDigits(String input) {
-    const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    const fa = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
-    var output = input;
-    for (var i = 0; i < en.length; i++) {
-      output = output.replaceAll(en[i], fa[i]);
-    }
-    return output;
-  }
-
-  Future<void> _showEditProfileDialog() async {
-    final fullNameController = TextEditingController(text: _fullName);
-    final usernameController = TextEditingController(text: _username);
-    final birthDateController = TextEditingController(text: _birthDate);
-    String gender = _gender;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            backgroundColor: kCard,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            title: const Text(
-              'ویرایش پروفایل',
-              style: TextStyle(
-                color: kText,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: fullNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'نام و نام خانوادگی',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'نام کاربری',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: birthDateController,
-                  decoration: const InputDecoration(
-                    labelText: 'تاریخ تولد',
-                    hintText: '2004-08-17',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: gender,
-                  decoration: const InputDecoration(
-                    labelText: 'جنسیت',
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'male',
-                      child: Text('آقا'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'female',
-                      child: Text('خانم'),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      gender = val;
-                    }
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('انصراف'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final newFullName = fullNameController.text.trim();
-                  final newUsername = usernameController.text.trim();
-                  final newBirthDate = birthDateController.text.trim();
-
-                  Navigator.of(ctx).pop();
-                  await _updateUserData(
-                    newFullName: newFullName,
-                    newUsername: newUsername,
-                    newGender: gender,
-                    newBirthDate: newBirthDate,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kPrimary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-                child: const Text('ذخیره'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCircleIconButton(IconData icon) {
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: BoxDecoration(
-        color: kCard,
-        shape: BoxShape.circle,
-        boxShadow: const [
-          BoxShadow(
-            color: kShadow,
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Icon(icon, color: kText, size: 20),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
-      child: Row(
-        children: [
-          GestureDetector(
-          onTap: () {
-      Navigator.of(context).push(
-      MaterialPageRoute(
-      builder: (_) => const SettingsPage(),
-       ),
-      );
-    },
-      child: _buildCircleIconButton(
-        Icons.settings_outlined,
-      ),
-    ),
-          const Spacer(),
-          const Text(
-            'پروفایل',
-            style: TextStyle(
-              color: kText,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Spacer(),
-          _buildCircleIconButton(Icons.settings_outlined),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileHeroCard() {
-    final age = _calculateAgeFromTextDate(_birthDate);
-    final ageLabel = age > 0 ? _toPersianDigits(age.toString()) : '—';
-    final genderText = _gender == 'female' ? 'خانم' : 'آقا';
-    final daysWithSi = _daysSince(_createdAt);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 26,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-          child: Row(
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFD3EEDC),
-                    width: 2,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Container(
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFFE6F6EE),
-                            Color(0xFFCBECD9),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.person_rounded,
-                          size: 42,
-                          color: kPrimaryDark,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      left: 4,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: kPrimary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: kCard, width: 2),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _fullName.isNotEmpty
-                                ? _fullName
-                                : (_username.isNotEmpty ? _username : 'کاربر Si'),
-                            style: const TextStyle(
-                              color: kText,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: _isSaving ? null : _showEditProfileDialog,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: kCard,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: kLine),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _isSaving ? 'در حال ذخیره...' : 'ویرایش',
-                                  style: const TextStyle(
-                                    color: kSubtext,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.edit_outlined,
-                                  size: 13,
-                                  color: kSubtext,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _username.isEmpty ? 'هوای خودت رو داشته باش' : '@$_username',
-                      style: const TextStyle(
-                        color: kSubtext,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _InfoMetric(
-                            icon: Icons.person_outline_rounded,
-                            value: ageLabel,
-                            label: 'سن',
-                          ),
-                        ),
-                        const _VerticalDividerSoft(),
-                        Expanded(
-                          child: _InfoMetric(
-                            icon: Icons.female_outlined,
-                            value: genderText,
-                            label: 'جنسیت',
-                          ),
-                        ),
-                        const _VerticalDividerSoft(),
-                        Expanded(
-                          child: _InfoMetric(
-                            icon: Icons.calendar_today_outlined,
-                            value: _toPersianDigits(daysWithSi.toString()),
-                            label: 'همراه با Si',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScoreCard() {
-    final score = _healthScore.clamp(0, 100);
-    final scoreValue = score / 100.0;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Container(
-        height: 138,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFFF3FCEB),
-              Color(0xFFE6FAF0),
-              Color(0xFFD7F4F4),
-            ],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 106,
-                height: 106,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 88,
-                      height: 88,
-                      child: CircularProgressIndicator(
-                        value: scoreValue,
-                        strokeWidth: 6,
-                        backgroundColor: Colors.white,
-                        valueColor: const AlwaysStoppedAnimation<Color>(kPrimary),
-                      ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _toPersianDigits(score.toString()),
-                          style: const TextStyle(
-                            color: kText,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          '/100',
-                          style: TextStyle(
-                            color: kSubtext,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'امتیاز سلامتی',
-                          style: TextStyle(
-                            color: kText,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        SizedBox(width: 6),
-                        Icon(
-                          Icons.favorite_rounded,
-                          color: kPrimary,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'ترکیبی از وضعیت بدن، نور، وقفه‌های سالم و رفتار روزانه',
-                      style: TextStyle(
-                        color: kSubtext,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.spa_outlined,
-                size: 56,
-                color: Color(0x8842D2A7),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    final actions = <_QuickActionItem>[
-      const _QuickActionItem(
-        icon: Icons.self_improvement_outlined,
-        title: 'تمرینات',
-        subtitle: 'حرکت‌های اصلاحی',
-      ),
-      const _QuickActionItem(
-        icon: Icons.remove_red_eye_outlined,
-        title: 'استراحت چشم',
-        subtitle: 'وقفه‌های ثبت‌شده',
-      ),
-      const _QuickActionItem(
-        icon: Icons.wb_incandescent_outlined,
-        title: 'نور محیط',
-        subtitle: 'کنترل روشنایی',
-      ),
-      const _QuickActionItem(
-        icon: Icons.bar_chart_rounded,
-        title: 'گزارش‌ها',
-        subtitle: 'روند پیشرفت',
-      ),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: List.generate(actions.length, (index) {
-            final item = actions[index];
-            return Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-                decoration: BoxDecoration(
-                  border: index == actions.length - 1
-                      ? null
-                      : const Border(
-                    left: BorderSide(color: kLine),
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: const BoxDecoration(
-                        color: kMintSoft,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        item.icon,
-                        color: kPrimaryDark,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      item.title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: kText,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.subtitle,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: kSubtext,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildModuleStatusCard() {
-    final postureBad = _badPostureMinutes >= 60;
-    final lightBad = _badLightMinutes >= 60;
-    final combinedBad = _combinedRiskMinutes >= 30;
-
-    final statuses = <_ModuleStatusItem>[
-      _ModuleStatusItem(
-        icon: Icons.remove_red_eye_outlined,
-        title: 'فاصله چشم',
-        status: _eyeBreakCount > 0 ? 'فعال' : 'کم‌وقفه',
-        dot: _eyeBreakCount > 0 ? kPrimary : kWarn,
-      ),
-      _ModuleStatusItem(
-        icon: Icons.psychology_outlined,
-        title: 'گردن',
-        status: postureBad ? 'نیاز به توجه' : 'مناسب',
-        dot: postureBad ? kWarn : kPrimary,
-      ),
-      _ModuleStatusItem(
-        icon: Icons.accessibility_new_outlined,
-        title: 'وضعیت بدن',
-        status: postureBad ? 'زمان نامناسب بالا' : 'مناسب',
-        dot: postureBad ? kWarn : kPrimary,
-      ),
-      _ModuleStatusItem(
-        icon: Icons.back_hand_outlined,
-        title: 'اصلاح‌ها',
-        status: _postureCorrectionCount > 0 ? 'ثبت شده' : 'بدون ثبت',
-        dot: _postureCorrectionCount > 0 ? kPrimary : kWarn,
-      ),
-      _ModuleStatusItem(
-        icon: Icons.lightbulb_outline_rounded,
-        title: 'نور محیط',
-        status: lightBad ? 'کم یا نامناسب' : 'مناسب',
-        dot: lightBad ? kWarn : kPrimary,
-      ),
-      _ModuleStatusItem(
-        icon: Icons.warning_amber_rounded,
-        title: 'ریسک ترکیبی',
-        status: combinedBad ? 'بالا' : 'کنترل‌شده',
-        dot: combinedBad ? kDanger : kPrimary,
-      ),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-          child: Column(
-            children: [
-              Row(
-                children: const [
-                  Text(
-                    'وضعیت زنده',
-                    style: TextStyle(
-                      color: kPrimaryDark,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(width: 6),
-                  Icon(
-                    Icons.live_help,
-                    size: 11,
-                    color: kPrimaryDark,
-                  ),
-                  Spacer(),
-                  Text(
-                    'وضعیت ماژول‌ها',
-                    style: TextStyle(
-                      color: kText,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: List.generate(statuses.length, (index) {
-                  final item = statuses[index];
-                  return Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: item.dot == kPrimary
-                                  ? kMintSoft
-                                  : item.dot == kDanger
-                                  ? const Color(0xFFFFEFEF)
-                                  : const Color(0xFFFFF8E3),
-                            ),
-                            child: Icon(
-                              item.icon,
-                              color: kPrimaryDark,
-                              size: 22,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            item.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: kText,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: item.dot,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Flexible(
-                                child: Text(
-                                  item.status,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: kSubtext,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTodaySummaryCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
-          child: Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Spacer(),
-                    Text(
-                      'خلاصه امروز',
-                      style: TextStyle(
-                        color: kText,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFF7FBEF),
-                      Color(0xFFE5F8EE),
-                    ],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.health_and_safety_outlined,
-                      size: 34,
-                      color: Color(0x6642D2A7),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'زمان وضعیت نامناسب: ${_formatMinutes(_badPostureMinutes)}  |  نور نامناسب: ${_formatMinutes(_badLightMinutes)}',
-                        style: const TextStyle(
-                          color: kText,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.calendar_today_outlined,
-                        value: _toPersianDigits(_healthyDays.toString()),
-                        label: 'روزهای سالم',
-                      ),
-                    ),
-                    Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.notifications_none_rounded,
-                        value: _toPersianDigits(_alertsCount.toString()),
-                        label: 'هشدارها',
-                      ),
-                    ),
-                    Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.menu_book_outlined,
-                        value: _toPersianDigits(_healthyBehaviors.toString()),
-                        label: 'رفتار سالم',
-                      ),
-                    ),
-                    Expanded(
-                      child: _SummaryMetric(
-                        icon: Icons.access_time_rounded,
-                        value: _formatMinutes(_screenTimeMinutes),
-                        label: 'زمان استفاده',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRiskMetricsCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'شاخص‌های ریسک',
-                style: TextStyle(
-                  color: kText,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _RiskMetricCard(
-                      title: 'بدنشستن',
-                      value: _formatMinutes(_badPostureMinutes),
-                      icon: Icons.airline_seat_recline_normal_outlined,
-                      tint: _badPostureMinutes >= 60 ? kWarn : kPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _RiskMetricCard(
-                      title: 'نور بد',
-                      value: _formatMinutes(_badLightMinutes),
-                      icon: Icons.light_mode_outlined,
-                      tint: _badLightMinutes >= 60 ? kWarn : kPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _RiskMetricCard(
-                      title: 'همزمان',
-                      value: _formatMinutes(_combinedRiskMinutes),
-                      icon: Icons.warning_amber_rounded,
-                      tint: _combinedRiskMinutes >= 30 ? kDanger : kPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryMetric(
-                      icon: Icons.visibility_outlined,
-                      value: _toPersianDigits(_eyeBreakCount.toString()),
-                      label: 'وقفه چشم',
-                    ),
-                  ),
-                  Expanded(
-                    child: _SummaryMetric(
-                      icon: Icons.accessibility_new_outlined,
-                      value: _toPersianDigits(_postureCorrectionCount.toString()),
-                      label: 'اصلاح وضعیت',
-                    ),
-                  ),
-                  Expanded(
-                    child: _SummaryMetric(
-                      icon: Icons.tune_outlined,
-                      value: _hunchDivisor == 0 ? '—' : _hunchDivisor.toStringAsFixed(2),
-                      label: 'کالیبراسیون',
-                    ),
-                  ),
-                  Expanded(
-                    child: _SummaryMetric(
-                      icon: Icons.dark_mode_outlined,
-                      value: _darkModeEnabled ? 'روشن' : 'خاموش',
-                      label: 'حالت شب',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCalibrationCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: kShadow,
-              blurRadius: 22,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: kMintSoft,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.settings_accessibility_outlined,
-                  color: kPrimaryDark,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'کالیبراسیون شخصی',
-                      style: TextStyle(
-                        color: kText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'آخرین بروزرسانی - ${_formatDateAgo(_lastCalibratedAt)}',
-                      style: const TextStyle(
-                        color: kSubtext,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () async {
-                  await _markCalibrationNow();
-                  if (!mounted) return;
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (ctx) => const CalibrationScreen(cameras: []),
-                    ),
-                  );
-                },
-                child: Container(
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  decoration: BoxDecoration(
-                    color: kPrimary,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'کالیبره مجدد',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Directionality(
+      await showDialog<void>(context: context, builder: (dialogContext) => Directionality(
         textDirection: TextDirection.rtl,
-        child: Scaffold(
-          backgroundColor: kBg,
-          body: Center(child: CircularProgressIndicator()),
+        child: AlertDialog(
+          backgroundColor: card,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('اطلاعات شخصی', style: TextStyle(color: text, fontWeight: FontWeight.w900)),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'نام و نام خانوادگی', prefixIcon: Icon(Icons.badge_outlined))),
+            const SizedBox(height: 12),
+            TextField(controller: userName, decoration: const InputDecoration(labelText: 'نام کاربری', prefixIcon: Icon(Icons.alternate_email_rounded))),
+            const SizedBox(height: 12),
+            TextField(controller: birth, keyboardType: TextInputType.datetime, decoration: const InputDecoration(labelText: 'تاریخ تولد', hintText: '2009-08-17', prefixIcon: Icon(Icons.cake_outlined))),
+            const SizedBox(height: 12),
+            StatefulBuilder(builder: (_, setLocal) => DropdownButtonFormField<String>(
+              value: selectedGender,
+              decoration: const InputDecoration(labelText: 'جنسیت', prefixIcon: Icon(Icons.wc_outlined)),
+              items: const [DropdownMenuItem(value: 'male', child: Text('آقا')), DropdownMenuItem(value: 'female', child: Text('خانم'))],
+              onChanged: (v) => setLocal(() => selectedGender = v ?? selectedGender),
+            )),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('انصراف')),
+            FilledButton(
+              onPressed: saving ? null : () async {
+                final user = supabase.auth.currentUser; if (user == null) return;
+                setState(() => saving = true);
+                try {
+                  await supabase.from('users').update({'full_name': name.text.trim(), 'username': userName.text.trim(), 'gender': selectedGender, 'birth_date': birth.text.trim(), 'last_active_at': DateTime.now().toIso8601String()}).eq('id', user.id);
+                  if (!mounted) return;
+                  setState(() { fullName = name.text.trim(); username = userName.text.trim(); gender = selectedGender; birthDate = birth.text.trim(); saving = false; });
+                  Navigator.pop(dialogContext); _message('اطلاعات حساب ذخیره شد.');
+                } catch (_) { if (mounted) { setState(() => saving = false); _message('ذخیره اطلاعات انجام نشد.'); } }
+              },
+              style: FilledButton.styleFrom(backgroundColor: green), child: const Text('ذخیره تغییرات'),
+            ),
+          ],
         ),
-      );
-    }
+      ));
+    } finally { name.dispose(); userName.dispose(); birth.dispose(); }
+  }
 
-    return Directionality(
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: kBg,
-        body: SafeArea(
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(child: _buildHeader()),
-              SliverToBoxAdapter(child: _buildProfileHeroCard()),
-              SliverToBoxAdapter(child: _buildScoreCard()),
-              SliverToBoxAdapter(child: _buildQuickActions()),
-              SliverToBoxAdapter(child: _buildModuleStatusCard()),
-              SliverToBoxAdapter(child: _buildTodaySummaryCard()),
-              SliverToBoxAdapter(child: _buildRiskMetricsCard()),
-              SliverToBoxAdapter(child: _buildCalibrationCard()),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoMetric extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _InfoMetric({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: _ProfilePageState.kPrimaryDark,
-          size: 20,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: _ProfilePageState.kText,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: const TextStyle(
-            color: _ProfilePageState.kSubtext,
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _VerticalDividerSoft extends StatelessWidget {
-  const _VerticalDividerSoft();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 52,
-      color: _ProfilePageState.kLine,
-    );
-  }
-}
-
-class _QuickActionItem {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _QuickActionItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-}
-
-class _ModuleStatusItem {
-  final IconData icon;
-  final String title;
-  final String status;
-  final Color dot;
-
-  const _ModuleStatusItem({
-    required this.icon,
-    required this.title,
-    required this.status,
-    required this.dot,
-  });
-}
-
-class _SummaryMetric extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-
-  const _SummaryMetric({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: _ProfilePageState.kSubtext,
-          size: 22,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: _ProfilePageState.kText,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: _ProfilePageState.kSubtext,
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RiskMetricCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color tint;
-
-  const _RiskMetricCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.tint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = tint == _ProfilePageState.kPrimary
-        ? _ProfilePageState.kMintSoft
-        : tint == _ProfilePageState.kDanger
-        ? const Color(0xFFFFEFEF)
-        : const Color(0xFFFFF8E3);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: tint, size: 22),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              color: _ProfilePageState.kSubtext,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: _ProfilePageState.kText,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+      child: AlertDialog(
+        title: const Text('خروج از حساب'),
+        content: const Text('از حساب فعلی خارج می‌شوی و برای ورود دوباره به صفحه ورود منتقل می‌شوی.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: danger), child: const Text('خروج')),
         ],
       ),
-    );
+    ));
+    if (confirmed != true) return;
+    try { BackgroundMonitorService.stop(); if (await FlutterOverlayWindow.isActive()) await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
+    await supabase.auth.signOut();
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
+
+  Future<void> _openCalibration() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) { _message('دوربین در دسترس نیست.'); return; }
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => CalibrationScreen(cameras: cameras)));
+      await _load();
+    } catch (_) { _message('باز کردن کالیبراسیون ممکن نشد.'); }
+  }
+
+  Future<void> _openSettings() async => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+  Future<void> _openExercise() async => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExerciseCenterPage()));
+  void _message(String message) { if (!mounted) return; ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating)); }
+
+  Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(18)}) => Container(padding: padding, decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: line), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 20, offset: const Offset(0, 7))]), child: child);
+  Widget _sectionTitle(String title, String subtitle) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(color: subtext, fontSize: 11))]));
+
+  Widget _accountHeader() => _card(padding: const EdgeInsets.all(20), child: Column(children: [
+    Row(children: [
+      Container(width: 64, height: 64, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.person_rounded, color: Colors.white, size: 34)),
+      const SizedBox(width: 14),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(displayName, style: const TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(username.isEmpty ? 'پروفایل شخصی' : '@$username', style: const TextStyle(color: subtext, fontSize: 12))])),
+      IconButton(onPressed: _editProfile, icon: const Icon(Icons.edit_rounded, color: text)),
+    ]),
+    const SizedBox(height: 18), Container(height: 1, color: line), const SizedBox(height: 14),
+    Row(children: [Expanded(child: _miniInfo(Icons.cake_outlined, age > 0 ? '$age سال' : 'ثبت نشده', 'سن')), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.wc_outlined, gender == 'female' ? 'خانم' : 'آقا', 'جنسیت')), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.tune_rounded, hunchDivisor > 0 ? 'فعال' : 'نیازمند', 'کالیبراسیون'))]),
+  ]));
+
+  Widget _miniInfo(IconData icon, String value, String label) => Column(children: [Icon(icon, color: green, size: 19), const SizedBox(height: 5), Text(value, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text(label, style: const TextStyle(color: subtext, fontSize: 10))]);
+
+  Widget _accountDetails() {
+    final email = supabase.auth.currentUser?.email ?? 'ثبت نشده';
+    final calibrated = lastCalibratedAt == null ? 'هنوز انجام نشده' : _formatDate(lastCalibratedAt!);
+    return _card(child: Column(children: [
+      _detail(Icons.mail_outline_rounded, 'ایمیل حساب', email, editable: false),
+      const Divider(height: 22, color: line),
+      _detail(Icons.alternate_email_rounded, 'نام کاربری', username.isEmpty ? 'ثبت نشده' : username, onTap: _editProfile),
+      const Divider(height: 22, color: line),
+      _detail(Icons.cake_outlined, 'تاریخ تولد', birthDate.isEmpty ? 'ثبت نشده' : birthDate, onTap: _editProfile),
+      const Divider(height: 22, color: line),
+      _detail(Icons.verified_outlined, 'آخرین کالیبراسیون', calibrated, onTap: _openCalibration),
+    ]));
+  }
+
+  Widget _detail(IconData icon, String label, String value, {VoidCallback? onTap, bool editable = true}) => InkWell(onTap: editable ? onTap : null, borderRadius: BorderRadius.circular(14), child: Row(children: [Container(width: 40, height: 40, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green, size: 20)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: subtext, fontSize: 10)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w800))])), if (editable) const Icon(Icons.chevron_left_rounded, color: subtext)]));
+
+  Widget _healthSnapshot() {
+    final score = today?.healthScore ?? 0;
+    final screen = today?.screenTime.round() ?? 0;
+    final posture = ((today?.hunch ?? 0) + (today?.neck ?? 0) + (today?.wrist ?? 0)).round();
+    return Row(children: [Expanded(child: _metric('امتیاز امروز', '$score', Icons.favorite_rounded)), const SizedBox(width: 8), Expanded(child: _metric('صفحه', '${screen}د', Icons.phone_android_rounded)), const SizedBox(width: 8), Expanded(child: _metric('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded))]);
+  }
+
+  Widget _metric(String label, String value, IconData icon) => _card(padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 7), child: Column(children: [Icon(icon, color: green, size: 20), const SizedBox(height: 6), Text(value, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(label, textAlign: TextAlign.center, style: const TextStyle(color: subtext, fontSize: 9, fontWeight: FontWeight.w700))]));
+
+  Widget _moodCard() {
+    const moods = {'خیلی خوب': '😄', 'خوب': '🙂', 'معمولی': '😐', 'خسته': '😮‍💨', 'بد': '😕'};
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Row(children: [Icon(Icons.psychology_alt_rounded, color: green, size: 20), SizedBox(width: 8), Text('حال امروز', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900))]),
+      const SizedBox(height: 5), const Text('یک ثبت کوتاه برای دنبال کردن حال روزانه.', style: TextStyle(color: subtext, fontSize: 11)), const SizedBox(height: 12),
+      Wrap(spacing: 6, runSpacing: 6, children: moods.entries.map((e) => ChoiceChip(selected: mood == e.key, label: Text('${e.value} ${e.key}'), onSelected: (_) { setState(() => mood = e.key); }, selectedColor: mint, side: BorderSide(color: mood == e.key ? green : line))).toList()),
+    ]));
+  }
+
+  Widget _quickActions() => _card(child: Column(children: [
+    _action(Icons.tune_rounded, 'کالیبراسیون وضعیت بدن', hunchDivisor > 0 ? 'فعال • آخرین تنظیم: ${lastCalibratedAt == null ? 'نامشخص' : _formatDate(lastCalibratedAt!)}' : 'برای شروع پایش انجام دهید', _openCalibration),
+    const Divider(height: 22, color: line),
+    _action(Icons.fitness_center_rounded, 'مرکز تمرین', 'تمرین‌های مرتبط با وضعیت بدنت', _openExercise),
+    const Divider(height: 22, color: line),
+    _action(Icons.settings_outlined, 'تنظیمات پایش', 'دوربین، هشدارها و محافظت از محتوا', _openSettings),
+  ]));
+
+  Widget _action(IconData icon, String title, String subtitle, VoidCallback onTap) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(15), child: Row(children: [Container(width: 42, height: 42, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 10))])), const Icon(Icons.chevron_left_rounded, color: subtext)]));
+  String _formatDate(DateTime date) => '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) => Directionality(textDirection: TextDirection.rtl, child: Scaffold(backgroundColor: bg, body: SafeArea(child: loading ? const Center(child: CircularProgressIndicator(color: green)) : RefreshIndicator(color: green, onRefresh: _load, child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(18, 10, 18, 30), children: [
+    Row(children: [const Text('پروفایل', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Spacer(), IconButton(onPressed: _editProfile, tooltip: 'ویرایش اطلاعات', icon: const Icon(Icons.edit_outlined, color: text)), IconButton(onPressed: _logout, tooltip: 'خروج', icon: const Icon(Icons.logout_rounded, color: danger))]),
+    const SizedBox(height: 12), _accountHeader(), const SizedBox(height: 18),
+    _sectionTitle('اطلاعات حساب', 'اطلاعات واقعی حساب را ببین و از همین‌جا ویرایش کن.'), _accountDetails(), const SizedBox(height: 18),
+    _sectionTitle('وضعیت امروز', 'خلاصه‌ای از داده‌هایی که سی همین امروز ثبت کرده است.'), _healthSnapshot(), const SizedBox(height: 18),
+    _sectionTitle('سلامت شخصی', 'یک فضای کوچک برای بررسی وضعیت ذهنی روزانه.'), _moodCard(), const SizedBox(height: 18),
+    _sectionTitle('دسترسی سریع', 'ابزارهای اصلی را بدون تکرار و شلوغی در دسترس نگه داریم.'), _quickActions(), const SizedBox(height: 20),
+    OutlinedButton.icon(onPressed: _logout, icon: const Icon(Icons.logout_rounded, color: danger), label: const Text('خروج از حساب', style: TextStyle(color: danger, fontWeight: FontWeight.w800)), style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0x33D95C5C)), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)))),
+  ])))));
 }

@@ -1,329 +1,96 @@
 import 'package:flutter/material.dart';
-import 'profile_page.dart'; // اضافه شدن ایمپورت صفحه پروفایل
+import '../backend/daily_health_metric.dart';
+import '../backend/health_data_repository.dart';
 
-class HealthSummaryPage extends StatelessWidget {
-  const HealthSummaryPage({Key? key}) : super(key: key);
+class HealthSummaryPage extends StatefulWidget {
+  const HealthSummaryPage({super.key});
 
-  // پالت رنگی اصلی اپلیکیشن S
-  final Color mintGreen = const Color(0xFF42D2A7);
-  final Color tealColor = const Color(0xFF45C4D0);
-  final Color bgColor = const Color(0xFFF5F7FA);
+  @override
+  State<HealthSummaryPage> createState() => _HealthSummaryPageState();
+}
+
+class _HealthSummaryPageState extends State<HealthSummaryPage> {
+  static const bg = Color(0xFFF4F9F7);
+  static const card = Colors.white;
+  static const green = Color(0xFF42D2A7);
+  static const teal = Color(0xFF45C4D0);
+  static const text = Color(0xFF263B37);
+  static const subtext = Color(0xFF7D8D89);
+  static const mint = Color(0xFFE8F8F1);
+  static const line = Color(0xFFE8EFEC);
+
+  bool loading = true;
+  String? error;
+  List<DailyHealthMetric> metrics = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final rows = await HealthDataRepository.instance.getDailyMetrics(days: 7);
+      if (!mounted) return;
+      setState(() {
+        metrics = rows.map(DailyHealthMetric.fromMap).toList();
+        loading = false;
+        error = null;
+      });
+    } catch (_) {
+      if (mounted) setState(() { loading = false; error = 'داده‌های سلامت فعلاً در دسترس نیست.'; });
+    }
+  }
+
+  DailyHealthMetric? get today => metrics.isEmpty ? null : metrics.first;
+
+  double get risk => today == null ? 0 : today!.neck + today!.hunch + today!.wrist + today!.tooClose + today!.badLight;
+
+  int get score => today?.healthScore ?? (risk == 0 ? 0 : (100 - risk * .8).clamp(0, 100).round());
+
+  String _minutes(double value) {
+    if (value < 1) return '${(value * 60).round()} ثانیه';
+    if (value < 60) return '${value.round()} دقیقه';
+    final h = value ~/ 60;
+    final m = value.round() % 60;
+    return m == 0 ? '$h ساعت' : '$h ساعت و $m دقیقه';
+  }
+
+  Widget _card({required Widget child}) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: line), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 20, offset: const Offset(0, 7))]),
+    child: child,
+  );
+
+  Widget _metric(String title, String value, IconData icon, Color color) => Expanded(child: _card(child: Column(children: [Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(.10), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)), const SizedBox(height: 8), Text(value, textAlign: TextAlign.center, style: const TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(title, textAlign: TextAlign.center, style: const TextStyle(color: subtext, fontSize: 9))])));
+
+  Widget _riskRow(String title, double value, IconData icon, Color color) => Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: color.withOpacity(.10), shape: BoxShape.circle), child: Icon(icon, color: color, size: 19)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 5), ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(minHeight: 6, value: (value / 60).clamp(0, 1), backgroundColor: line, valueColor: AlwaysStoppedAnimation(color)))])), const SizedBox(width: 10), Text(_minutes(value), style: const TextStyle(color: subtext, fontSize: 10, fontWeight: FontWeight.w700))]));
+
+  String get recommendation {
+    final d = today;
+    if (d == null) return 'مانیتورینگ را فعال کن تا سی بتواند توصیه‌های شخصی‌تری بسازد.';
+    if (d.hunch >= d.neck && d.hunch >= d.wrist && d.hunch >= d.tooClose) return 'امروز فرم نشستن مهم‌ترین نقطه قابل بهبود توست. چند استراحت کوتاه و اصلاح ارتفاع صفحه کمک می‌کند.';
+    if (d.tooClose >= d.neck && d.tooClose >= d.wrist) return 'امروز فاصله‌ات از صفحه بیشتر از بقیه موارد نیاز به توجه دارد. صفحه را کمی دورتر قرار بده.';
+    if (d.neck >= d.wrist) return 'گردن امروز بیشترین فشار را گرفته است. صفحه را هم‌سطح چشم قرار بده و شانه‌ها را رها کن.';
+    return 'مچ‌ها امروز بیشتر درگیر بوده‌اند. یک وقفه کوتاه و کشش ملایم برای مچ‌ها داشته باش.';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: bgColor,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(context), // پاس دادن context برای نویگیشن
-                const SizedBox(height: 30),
-                _buildDailyMetrics(),
-                const SizedBox(height: 30),
-                _buildActionCards(),
-                const SizedBox(height: 30),
-                _buildDailyTips(),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 1. هدر صفحه شامل خوش‌آمدگویی و پروفایل
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'سلام، روز بخیر! 👋',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'خلاصه وضعیت امروز',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2D3142),
-              ),
-            ),
-          ],
-        ),
-        // اضافه شدن GestureDetector برای هدایت به صفحه پروفایل
-        GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ProfilePage()),
-            );
-          },
-          child: Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [mintGreen, tealColor],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: mintGreen.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.person, color: Colors.white, size: 30),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 2. حلقه‌های پیشرفت روزانه (Daily Metrics)
-  Widget _buildDailyMetrics() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildProgressRing(
-              title: 'فرم گردن',
-              percent: 0.85,
-              icon: Icons.accessibility_new_rounded,
-              color: mintGreen),
-          _buildProgressRing(
-              title: 'استراحت چشم',
-              percent: 0.60,
-              icon: Icons.remove_red_eye_rounded,
-              color: tealColor),
-          _buildProgressRing(
-              title: 'تحرک مچ',
-              percent: 0.40,
-              icon: Icons.back_hand_rounded,
-              color: const Color(0xFFFFA62B)), // رنگ مکمل برای جلب توجه
-        ],
-      ),
-    );
-  }
-
-  // ویجت سازنده حلقه‌های پیشرفت
-  Widget _buildProgressRing({
-    required String title,
-    required double percent,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: 75,
-              height: 75,
-              child: CircularProgressIndicator(
-                value: percent,
-                backgroundColor: color.withOpacity(0.15),
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-                strokeWidth: 8,
-                strokeCap: StrokeCap.round,
-              ),
-            ),
-            Icon(icon, color: color, size: 28),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF4A4E69),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '${(percent * 100).toInt()}%',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 3. کارت‌های عملیاتی و دسترسی سریع
-  Widget _buildActionCards() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildSingleCard(
-            title: 'محافظت از چشم',
-            subtitle: 'فیلتر نور آبی فعال است',
-            icon: Icons.brightness_4_rounded,
-            gradient: LinearGradient(
-              colors: [mintGreen.withOpacity(0.8), mintGreen],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: _buildSingleCard(
-            title: 'آنالیز فرم نشستن',
-            subtitle: 'نیاز به اصلاح زاویه',
-            icon: Icons.airline_seat_recline_normal_rounded,
-            gradient: LinearGradient(
-              colors: [tealColor.withOpacity(0.8), tealColor],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSingleCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Gradient gradient,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: gradient.colors.last.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 4. لیست نکات روزانه سلامتی (طراحی حباب دار)
-  Widget _buildDailyTips() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'توصیه‌های امروز شما',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2D3142),
-          ),
-        ),
-        const SizedBox(height: 15),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: mintGreen.withOpacity(0.2), width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: mintGreen.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.water_drop_rounded, color: tealColor),
-              ),
-              const SizedBox(width: 15),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'نوشیدن آب را فراموش نکنید!',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: Color(0xFF2D3142),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'برای جلوگیری از خشکی چشم در حین کار با صفحه نمایش، هیدراته بمانید.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return Directionality(textDirection: TextDirection.rtl, child: Scaffold(backgroundColor: bg, body: SafeArea(child: loading ? const Center(child: CircularProgressIndicator(color: green)) : RefreshIndicator(color: green, onRefresh: _load, child: ListView(padding: const EdgeInsets.fromLTRB(18, 12, 18, 30), children: [
+      Row(children: [const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('گزارش سلامت', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 4), Text('تحلیل داده‌های ثبت‌شده، بدون ویجت‌های تکراری', style: TextStyle(color: subtext, fontSize: 10))])), IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded, color: text))]),
+      const SizedBox(height: 14),
+      if (error != null) ...[Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.orange.withOpacity(.08), borderRadius: BorderRadius.circular(16)), child: Text(error!, style: const TextStyle(color: text, fontSize: 11))), const SizedBox(height: 14)],
+      _card(child: Row(children: [SizedBox(width: 96, height: 96, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 9, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Text('$score', style: const TextStyle(color: text, fontSize: 24, fontWeight: FontWeight.w900))])), const SizedBox(width: 16), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('امتیاز سلامت امروز', style: TextStyle(color: subtext, fontSize: 11)), const SizedBox(height: 5), Text(today == null ? 'هنوز داده‌ای نداریم' : score >= 80 ? 'وضعیت امروز خوب است' : score >= 60 ? 'چند مورد برای اصلاح وجود دارد' : 'امروز به بدنت بیشتر توجه کن', style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 6), Text('بر اساس داده‌های واقعی پایش امروز', style: const TextStyle(color: subtext, fontSize: 10))]))]),
+      const SizedBox(height: 12),
+      Row(children: [_metric('گردن', _minutes(today?.neck ?? 0), Icons.accessibility_new_rounded, green), const SizedBox(width: 8), _metric('قوز', _minutes(today?.hunch ?? 0), Icons.airline_seat_recline_normal_rounded, teal), const SizedBox(width: 8), _metric('مچ', _minutes(today?.wrist ?? 0), Icons.back_hand_rounded, const Color(0xFFFFA62B))]),
+      const SizedBox(height: 12),
+      _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('جزئیات عوامل خطر', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), const Text('این بخش همان داده‌های backend را به شکل قابل استفاده نمایش می‌دهد.', style: TextStyle(color: subtext, fontSize: 10)), const SizedBox(height: 8), _riskRow('نزدیک بودن به صفحه', today?.tooClose ?? 0, Icons.phone_android_rounded, const Color(0xFF8B7CF6)), _riskRow('نور نامناسب', today?.badLight ?? 0, Icons.light_mode_rounded, const Color(0xFFFFB020))]),
+      const SizedBox(height: 12),
+      _card(child: Row(children: [Container(width: 44, height: 44, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: const Icon(Icons.psychology_alt_rounded, color: green)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('پیشنهاد امروز', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(recommendation, style: const TextStyle(color: subtext, fontSize: 10, height: 1.6))]))]),
+      const SizedBox(height: 12),
+      _card(child: Row(children: [const Icon(Icons.history_rounded, color: teal), const SizedBox(width: 10), Expanded(child: Text(metrics.isEmpty ? 'هنوز تاریخچه‌ای ثبت نشده است.' : '${metrics.length} روز داده برای مقایسه در دسترس است.', style: const TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w700))), TextButton(onPressed: _load, child: const Text('به‌روزرسانی', style: TextStyle(color: green, fontWeight: FontWeight.w800)))])),
+    ]))));
   }
 }
