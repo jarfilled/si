@@ -86,7 +86,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _mood = savedMood;
         _loading = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
       _message('اطلاعات پروفایل بارگذاری نشد.');
@@ -143,9 +143,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _openSettings() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsPage()),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
   }
 
   Future<void> _openCalibration() async {
@@ -155,11 +153,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _message('دوربین در دسترس نیست.');
         return;
       }
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => CalibrationScreen(cameras: cameras),
-        ),
-      );
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => CalibrationScreen(cameras: cameras)));
       await _load();
     } catch (_) {
       _message('باز کردن صفحه کالیبراسیون ممکن نشد.');
@@ -167,9 +161,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _openExercise() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ExerciseCenterPage()),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExerciseCenterPage()));
   }
 
   Future<void> _editProfile() async {
@@ -277,16 +269,18 @@ class _ProfilePageState extends State<ProfilePage> {
         child: InkWell(
           onTap: onTap,
           customBorder: const CircleBorder(),
-          child: const Padding(
-            padding: EdgeInsets.all(11),
-            child: Icon(Icons.settings_outlined, color: kText, size: 20),
-          ),
+          child: Padding(padding: const EdgeInsets.all(11), child: Icon(icon, color: kText, size: 20)),
         ),
       );
 
   Widget _profileCard() {
     final displayName = _fullName.isNotEmpty ? _fullName : (_username.isNotEmpty ? _username : 'کاربر سی');
     final age = _age();
+    final meta = <String>[];
+    if (_username.isNotEmpty) meta.add('@$_username');
+    if (age > 0) meta.add('$age سال');
+    meta.add(_gender == 'female' ? 'خانم' : 'آقا');
+
     return _card(
       child: Row(
         children: [
@@ -306,12 +300,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Text(displayName, style: const TextStyle(color: kText, fontSize: 19, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
-                Text(
-                  [_username.isEmpty ? null : '@$_username', age == 0 ? null : '$age سال', _gender == 'female' ? 'خانم' : 'آقا']
-                      .whereType<String>()
-                      .join('  •  '),
-                  style: const TextStyle(color: kSubtext, fontSize: 12),
-                ),
+                Text(meta.join('  •  '), style: const TextStyle(color: kSubtext, fontSize: 12)),
               ],
             ),
           ),
@@ -331,7 +320,7 @@ class _ProfilePageState extends State<ProfilePage> {
         const SizedBox(width: 10),
         Expanded(child: _stat('زمان صفحه', '${screen}د', Icons.phone_android_rounded)),
         const SizedBox(width: 10),
-        Expanded(child: _stat('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded)),
+        Expanded(child: _stat('بدن ناسالم', '${posture}د', Icons.accessibility_new_rounded)),
       ],
     );
   }
@@ -409,7 +398,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _actionCard() => _card(
         child: Column(
           children: [
-            _action(Icons.tune_rounded, 'کالیبراسیون وضعیت بدن', _hunchDivisor > 0 ? 'آخرین تنظیم: ${_lastCalibratedAt == null ? 'ثبت شده' : 'فعال'}' : 'هنوز انجام نشده', _openCalibration),
+            _action(Icons.tune_rounded, 'کالیبراسیون وضعیت بدن', _hunchDivisor > 0 ? 'کالیبراسیون فعال است' : 'هنوز انجام نشده', _openCalibration),
             const Divider(height: 22, color: kLine),
             _action(Icons.fitness_center_rounded, 'مرکز تمرین', 'تمرین متناسب با وضعیت امروزت', _openExercise),
             const Divider(height: 22, color: kLine),
