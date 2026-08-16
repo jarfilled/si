@@ -17,6 +17,7 @@ import 'womens_health_page.dart';
 class MainNavigationScreen extends StatefulWidget {
   final String userGender;
   const MainNavigationScreen({super.key, required this.userGender});
+
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
@@ -25,7 +26,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   static const green = Color(0xFF42D2A7);
   static const teal = Color(0xFF45C4D0);
   static const bg = Color(0xFFF4F9F7);
-  static const text = Color(0xFF263B37);
   static const subtext = Color(0xFF7D8D89);
 
   int currentIndex = 0;
@@ -126,13 +126,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         child: StatefulBuilder(
           builder: (_, setLocal) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: const Text('حریم خصوصی و پایش', style: TextStyle(color: text, fontWeight: FontWeight.w900)),
+            title: const Text('حریم خصوصی و پایش', style: TextStyle(fontWeight: FontWeight.w900)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('برای پایش وضعیت بدن، دوربین در پس‌زمینه استفاده می‌شود. پردازش وضعیت بدن روی دستگاه انجام می‌شود و تصویر خام برای این قابلیت ذخیره یا ارسال نمی‌شود.', style: TextStyle(color: subtext, fontSize: 13, height: 1.7)),
+                const Text('برای پایش وضعیت بدن، دوربین در پس‌زمینه استفاده می‌شود. پردازش وضعیت بدن روی دستگاه انجام می‌شود و تصویر خام برای این قابلیت ذخیره یا ارسال نمی‌شود.'),
                 const SizedBox(height: 14),
-                CheckboxListTile(value: checked, onChanged: (value) => setLocal(() => checked = value ?? false), activeColor: green, contentPadding: EdgeInsets.zero, title: const Text('شرایط و دسترسی‌ها را می‌پذیرم.', style: TextStyle(fontSize: 12, color: text))),
+                CheckboxListTile(value: checked, onChanged: (value) => setLocal(() => checked = value ?? false), activeColor: green, contentPadding: EdgeInsets.zero, title: const Text('شرایط و دسترسی‌ها را می‌پذیرم.')),
               ],
             ),
             actions: [
@@ -181,7 +181,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
           child: Container(
             height: 68,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.06), blurRadius: 24, offset: const Offset(0, 7))]),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, 7))]),
             child: Row(
               children: List.generate(navItems.length, (i) {
                 final selected = i == currentIndex;
@@ -191,15 +191,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       margin: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(color: selected ? green.withOpacity(.12) : Colors.transparent, borderRadius: BorderRadius.circular(17)),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(navItems[i].icon, size: 21, color: selected ? green : subtext),
-                          const SizedBox(height: 3),
-                          Text(navItems[i].label, style: TextStyle(color: selected ? green : subtext, fontSize: 9, fontWeight: selected ? FontWeight.w900 : FontWeight.w600)),
-                        ],
-                      ),
+                      decoration: BoxDecoration(color: selected ? green.withValues(alpha: .12) : Colors.transparent, borderRadius: BorderRadius.circular(17)),
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(navItems[i].icon, size: 21, color: selected ? green : subtext),
+                        const SizedBox(height: 3),
+                        Text(navItems[i].label, style: TextStyle(color: selected ? green : subtext, fontSize: 9, fontWeight: selected ? FontWeight.w900 : FontWeight.w600)),
+                      ]),
                     ),
                   ),
                 );
@@ -223,6 +220,7 @@ class _DashboardHome extends StatefulWidget {
   final VoidCallback onPosture;
   final VoidCallback onExercise;
   const _DashboardHome({required this.isMonitoringActive, required this.onPosture, required this.onExercise});
+
   @override
   State<_DashboardHome> createState() => _DashboardHomeState();
 }
@@ -264,9 +262,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
 
   Future<void> _addWater() async {
     if (water >= 8) return;
+    final next = water + 1;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_waterKey(), water + 1);
-    if (mounted) setState(() => water++);
+    await prefs.setInt(_waterKey(), next);
+    if (mounted) setState(() => water = next);
   }
 
   Future<void> _setMood(String value) async {
@@ -289,7 +288,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
   Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(16)}) {
     return Container(
       padding: padding,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(21), border: Border.all(color: line), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 18, offset: const Offset(0, 6))]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(21), border: Border.all(color: line), boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 18, offset: Offset(0, 6))]),
       child: child,
     );
   }
@@ -332,18 +331,12 @@ class _DashboardHomeState extends State<_DashboardHome> {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(gradient: LinearGradient(colors: active ? const [green, teal] : const [Color(0xFF9AA4AD), Color(0xFF6E7983)]), borderRadius: BorderRadius.circular(22)),
-      child: Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white.withOpacity(.18), shape: BoxShape.circle), child: Icon(active ? Icons.radar_rounded : Icons.radar_outlined, color: Colors.white)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(active ? 'پایش فعال است' : 'پایش فعال نیست', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(active ? 'سی در حال ثبت الگوهای سلامت توست.' : 'برای دریافت گزارش روزانه، پایش را فعال کن.', style: const TextStyle(color: Colors.white70, fontSize: 10))])), Container(width: 9, height: 9, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]),
+      child: Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .18), shape: BoxShape.circle), child: Icon(active ? Icons.radar_rounded : Icons.radar_outlined, color: Colors.white)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(active ? 'پایش فعال است' : 'پایش فعال نیست', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(active ? 'سی در حال ثبت الگوهای سلامت توست.' : 'برای دریافت گزارش روزانه، پایش را فعال کن.', style: const TextStyle(color: Colors.white70, fontSize: 10))])), Container(width: 9, height: 9, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]),
     );
   }
 
   Widget _overview() {
-    return _card(
-      child: Row(children: [
-        SizedBox(width: 88, height: 88, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 8, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Column(mainAxisSize: MainAxisSize.min, children: [Text('$score', style: const TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Text('امتیاز', style: TextStyle(color: subtext, fontSize: 9))])])),
-        const SizedBox(width: 15),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('وضعیت امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(loading ? 'در حال دریافت داده‌ها...' : _scoreMessage(), style: const TextStyle(color: subtext, fontSize: 10, height: 1.5)), const SizedBox(height: 9), Text('زمان صفحه: ${_minutes(today?.screenTime ?? 0)}', style: const TextStyle(color: teal, fontSize: 10, fontWeight: FontWeight.w800))]))
-      ]),
-    );
+    return _card(child: Row(children: [SizedBox(width: 88, height: 88, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 8, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Column(mainAxisSize: MainAxisSize.min, children: [Text('$score', style: const TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Text('امتیاز', style: TextStyle(color: subtext, fontSize: 9))])])), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('وضعیت امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(loading ? 'در حال دریافت داده‌ها...' : _scoreMessage(), style: const TextStyle(color: subtext, fontSize: 10, height: 1.5)), const SizedBox(height: 9), Text('زمان صفحه: ${_minutes(today?.screenTime ?? 0)}', style: const TextStyle(color: teal, fontSize: 10, fontWeight: FontWeight.w800))]))]));
   }
 
   String _scoreMessage() { if (score >= 85) return 'عالیه؛ الگوی امروزت در وضعیت خوبی قرار دارد.'; if (score >= 65) return 'خوبه، اما چند استراحت کوتاه می‌تواند وضعیتت را بهتر کند.'; return 'امروز به وضعیت بدن و زمان استراحتت بیشتر توجه کن.'; }
@@ -352,7 +345,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Row(children: [Icon(Icons.water_drop_rounded, color: teal, size: 18), SizedBox(width: 6), Text('آب امروز', style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Text('$water/8 لیوان', style: const TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 6), ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: water / 8, minHeight: 5, backgroundColor: line, valueColor: const AlwaysStoppedAnimation(teal))), const SizedBox(height: 8), SizedBox(width: double.infinity, child: OutlinedButton(onPressed: water >= 8 ? null : _addWater, style: OutlinedButton.styleFrom(foregroundColor: teal, side: const BorderSide(color: teal), padding: const EdgeInsets.symmetric(vertical: 7)), child: const Text('+ یک لیوان', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800))))])),
       const SizedBox(width: 8),
-      Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Row(children: [Icon(Icons.psychology_alt_rounded, color: green, size: 18), SizedBox(width: 6), Text('حال امروز', style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Text(mood == null ? 'هنوز ثبت نشده' : mood!, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 7), Wrap(spacing: 3, children: ['😄', '🙂', '😐', '😮‍💨', '😕'].map((emoji) => InkWell(onTap: () => _setMood(emoji), child: Padding(padding: const EdgeInsets.all(3), child: Text(emoji, style: const TextStyle(fontSize: 16))))).toList())])))
+      Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Row(children: [Icon(Icons.psychology_alt_rounded, color: green, size: 18), SizedBox(width: 6), Text('حال امروز', style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Text(mood ?? 'هنوز ثبت نشده', style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 7), Wrap(spacing: 3, children: ['😄', '🙂', '😐', '😮‍💨', '😕'].map((emoji) => InkWell(onTap: () => _setMood(emoji), child: Padding(padding: const EdgeInsets.all(3), child: Text(emoji, style: const TextStyle(fontSize: 16))))).toList())])))
     ]);
   }
 
