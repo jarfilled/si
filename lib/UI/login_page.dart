@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -11,49 +11,88 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
 
-  final Color primaryGreen = const Color(0xFF42D2A7);
-  final Color darkTeal = const Color(0xFF145954);
+  static const primaryGreen = Color(0xFF42D2A7);
+  static const primaryTeal = Color(0xFF45C4D0);
+  static const text = Color(0xFF263B37);
+  static const subtext = Color(0xFF7D8D89);
+  static const background = Color(0xFFF4F9F7);
+  static const mint = Color(0xFFE8F8F1);
+
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _signIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _message('ایمیل و رمز عبور را وارد کنید.');
+      return;
+    }
+
     setState(() => _isLoading = true);
+
     try {
       final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
-      if (response.user != null && mounted) {
-        final userData = await Supabase.instance.client
-            .from('users')
-            .select('gender, hunch_divisor')
-            .eq('id', response.user!.id)
-            .maybeSingle();
+      final user = response.user;
+      if (user == null) throw const AuthException('ورود انجام نشد.');
 
-        final gender = userData?['gender'] ?? 'male';
-        final hasCalibrated = userData?['hunch_divisor'] != null;
+      final profile = await Supabase.instance.client
+          .from('users')
+          .select('gender, hunch_divisor')
+          .eq('id', user.id)
+          .maybeSingle();
 
-        if (hasCalibrated) {
-          Navigator.pushReplacementNamed(context, '/dashboard', arguments: gender);
-        } else {
-          Navigator.pushReplacementNamed(context, '/calibrate');
-        }
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('ایمیل یا رمز عبور اشتباه است.'),
-            backgroundColor: darkTeal,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      final gender = profile?['gender']?.toString() ?? 'male';
+      final calibrated = profile?['hunch_divisor'] != null;
+
+      Navigator.pushReplacementNamed(
+        context,
+        calibrated ? '/dashboard' : '/calibrate',
+        arguments: gender,
+      );
+    } on AuthException catch (error) {
+      _message(error.message);
+    } catch (_) {
+      _message('ورود انجام نشد. ایمیل و رمز عبور را بررسی کنید.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _message(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+  }
+
+  InputDecoration _inputDecoration({required String label, required IconData icon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      suffixIconColor: primaryGreen,
+    );
   }
 
   @override
@@ -61,135 +100,122 @@ class _LoginPageState extends State<LoginPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF4F9F7),
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 30.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // آیکون یا لوگوی اپلیکیشن
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: primaryGreen.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.spa_rounded, size: 80, color: primaryGreen),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  'خوش آمدید',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: darkTeal,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'برای ادامه وارد حساب کاربری خود شوید',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 40),
-
-                // فیلد ایمیل
-                _buildTextField(
-                  controller: _emailController,
-                  label: 'ایمیل',
-                  icon: Icons.email_outlined,
-                ),
-                const SizedBox(height: 20),
-
-                // فیلد رمز عبور
-                _buildTextField(
-                  controller: _passwordController,
-                  label: 'رمز عبور',
-                  icon: Icons.lock_outline_rounded,
-                  isPassword: true,
-                ),
-                const SizedBox(height: 40),
-
-                // دکمه ورود
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryGreen,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    onPressed: _isLoading ? null : _signIn,
-                    child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                        'ورود به برنامه',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // لینک ثبت نام
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+        backgroundColor: background,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('حساب کاربری ندارید؟ ', style: TextStyle(color: Colors.grey[700])),
-                    GestureDetector(
-                      onTap: () => Navigator.pushNamed(context, '/signup'),
-                      child: Text(
-                        'ثبت‌نام کنید',
-                        style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.maybePop(context),
+                          style: IconButton.styleFrom(backgroundColor: Colors.white),
+                          icon: const Icon(Icons.arrow_forward_rounded, color: text),
+                        ),
+                        const Spacer(),
+                        Image.asset('assets/logo.png', width: 48, height: 48),
+                        const Spacer(),
+                        const SizedBox(width: 48),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [mint, Color(0xFFEAF8FC)],
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                        ),
+                        borderRadius: BorderRadius.circular(30),
                       ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('خوش برگشتی 👋', style: TextStyle(color: text, fontSize: 27, fontWeight: FontWeight.w900)),
+                                SizedBox(height: 8),
+                                Text('برای دیدن وضعیت امروزت وارد حساب شو.', style: TextStyle(color: subtext, fontSize: 12, height: 1.7)),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.favorite_rounded, color: primaryGreen, size: 40),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(.045), blurRadius: 24, offset: const Offset(0, 8)),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textDirection: TextDirection.ltr,
+                            decoration: _inputDecoration(label: 'ایمیل', icon: Icons.mail_outline_rounded),
+                          ),
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            textDirection: TextDirection.ltr,
+                            decoration: _inputDecoration(label: 'رمز عبور', icon: Icons.lock_outline_rounded).copyWith(
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _signIn,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryGreen,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Text('ورود به برنامه', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('حساب کاربری ندارید؟', style: TextStyle(color: subtext, fontSize: 12)),
+                        TextButton(
+                          onPressed: () => Navigator.pushReplacementNamed(context, '/signup'),
+                          child: const Text('ثبت‌نام کنید', style: TextStyle(color: primaryGreen, fontWeight: FontWeight.w900)),
+                        ),
+                      ],
                     ),
                   ],
-                )
-              ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool isPassword = false
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          )
-        ],
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: isPassword,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.grey[500]),
-          prefixIcon: Icon(icon, color: primaryGreen),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(vertical: 20),
         ),
       ),
     );
