@@ -78,13 +78,13 @@ class _MonitoringSoundsPageState extends State<MonitoringSoundsPage> {
 
   Future<void> _pickFile(String alert) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.audio,
         allowMultiple: false,
         withData: false,
       );
-      if (result == null || result.files.isEmpty) return;
-      final path = result.files.single.path;
+      if (result == null || result.isEmpty) return;
+      final path = result.single.path;
       if (path == null || path.isEmpty) {
         _toast('دسترسی به فایل انتخاب‌شده ممکن نیست.');
         return;

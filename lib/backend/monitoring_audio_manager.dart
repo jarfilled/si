@@ -71,11 +71,11 @@ class MonitoringAudioManager {
   // ---------------------------------------------------------------------------
 
   static const Map<String, String> _defaultAssets = {
-    'tooClose': 'sounds/too_close.wav',
-    'neck': 'sounds/neck.wav',
-    'hunch': 'sounds/hunch.wav',
-    'wrist': 'sounds/wrist.wav',
-    'lowLight': 'sounds/low_light.wav',
+    'tooClose': 'assets/sounds/too_close.wav',
+    'neck': 'assets/sounds/neck.wav',
+    'hunch': 'assets/sounds/hunch.wav',
+    'wrist': 'assets/sounds/wrist.wav',
+    'lowLight': 'assets/sounds/low_light.wav',
   };
 
   // ---------------------------------------------------------------------------
@@ -354,7 +354,7 @@ class MonitoringAudioManager {
     await _recorder.hasPermission();
 
     if (!hasPermission) {
-      throw PermissionException(
+      throw StateError(
         'Microphone permission was not granted.',
       );
     }
