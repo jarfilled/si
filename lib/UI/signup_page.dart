@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignupPage extends StatefulWidget {
-  const SignupPage({Key? key}) : super(key: key);
+  const SignupPage({super.key});
 
   @override
-  _SignupPageState createState() => _SignupPageState();
+  State<SignupPage> createState() => _SignupPageState();
 }
 
 class _SignupPageState extends State<SignupPage> {
@@ -19,11 +19,20 @@ class _SignupPageState extends State<SignupPage> {
   String? _gender;
   bool _loading = false;
 
-  final Color primaryGreen = const Color(0xFF42D2A7);
-  final Color primaryTeal = const Color(0xFF45C4D0);
-  final Color bgColor = const Color(0xFFF4F9F7);
+  static const Color primaryGreen = Color(0xFF42D2A7);
+  static const Color primaryTeal = Color(0xFF45C4D0);
+  static const Color bgColor = Color(0xFFF4F9F7);
 
   final supabase = Supabase.instance.client;
+
+  @override
+  void dispose() {
+    _username.dispose();
+    _email.dispose();
+    _password.dispose();
+    _year.dispose();
+    super.dispose();
+  }
 
   Future<void> _signUp() async {
     if (_email.text.isEmpty || _password.text.isEmpty) {
@@ -33,30 +42,32 @@ class _SignupPageState extends State<SignupPage> {
       return;
     }
 
-    setState(() => _loading = true);
+    if (_day == null || _month == null || _year.text.trim().isEmpty || _gender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لطفاً تاریخ تولد و جنسیت را کامل کنید')),
+      );
+      return;
+    }
 
+    setState(() => _loading = true);
     try {
-      // ۱. ثبت نام کاربر در بخش Auth
-      final AuthResponse res = await supabase.auth.signUp(
+      final res = await supabase.auth.signUp(
         email: _email.text.trim(),
         password: _password.text,
       );
-
-      final User? user = res.user;
+      final user = res.user;
 
       if (user != null) {
-        // ۲. ذخیره اطلاعات تکمیلی در جدول users
         await supabase.from('users').insert({
-          'id': user.id, // استفاده از آیدی Auth برای ارتباط با دیتابیس
+          'id': user.id,
           'username': _username.text.trim(),
           'gender': _gender,
-          'birth_date': '${_year.text}-$_month-$_day',
+          'birth_date': '${_year.text.trim()}-$_month-$_day',
         });
 
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/calibrate');
       }
-
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,21 +83,84 @@ class _SignupPageState extends State<SignupPage> {
     }
   }
 
-
-
-
   InputDecoration _inputDec({required String hint, required IconData icon}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(color: Colors.grey.shade400),
-      prefixIcon: Icon(icon, color: primaryGreen.withOpacity(0.8)),
+      prefixIcon: Icon(icon, color: primaryGreen.withValues(alpha: .8)),
       filled: true,
       fillColor: Colors.grey.shade50,
-      contentPadding: const EdgeInsets.symmetric(vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
       ),
+    );
+  }
+
+  Widget _buildBirthDateFields() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 360;
+        return Container(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _day,
+                  hint: Text('روز', style: TextStyle(color: Colors.grey.shade400)),
+                  onChanged: (v) => setState(() => _day = v),
+                  decoration: const InputDecoration(border: InputBorder.none),
+                  isExpanded: true,
+                  items: List.generate(31, (i) => '${i + 1}')
+                      .map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis)))
+                      .toList(),
+                ),
+              ),
+              Container(width: 1, height: 28, color: Colors.grey.shade300),
+              Expanded(
+                flex: 4,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 8),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _month,
+                    hint: Text('ماه', style: TextStyle(color: Colors.grey.shade400)),
+                    onChanged: (v) => setState(() => _month = v),
+                    decoration: const InputDecoration(border: InputBorder.none),
+                    isExpanded: true,
+                    items: const ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند']
+                        .map((m) => DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis)))
+                        .toList(),
+                  ),
+                ),
+              ),
+              Container(width: 1, height: 28, color: Colors.grey.shade300),
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: EdgeInsets.only(right: compact ? 4 : 8),
+                  child: TextField(
+                    controller: _year,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: 'سال',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -96,157 +170,96 @@ class _SignupPageState extends State<SignupPage> {
       backgroundColor: bgColor,
       body: Stack(
         children: [
-          // پس‌زمینه مشابه
-          Positioned(top: -100, right: -50, child: CircleAvatar(radius: 180, backgroundColor: primaryGreen.withOpacity(0.06))),
-          Positioned(top: 300, left: -80, child: CircleAvatar(radius: 120, backgroundColor: primaryTeal.withOpacity(0.06))),
-
+          Positioned(top: -100, right: -50, child: CircleAvatar(radius: 180, backgroundColor: primaryGreen.withValues(alpha: .06))),
+          Positioned(top: 300, left: -80, child: CircleAvatar(radius: 120, backgroundColor: primaryTeal.withValues(alpha: .06))),
           SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    // کارت فرم شناور
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(40),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Icon(Icons.person_add_rounded, size: 60, color: primaryGreen.withOpacity(0.8)),
-                          const SizedBox(height: 16),
-                          Text('ساخت حساب جدید', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.grey.shade800)),
-                          const SizedBox(height: 8),
-                          Text('اطلاعات خود را وارد کنید', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-                          const SizedBox(height: 32),
-
-                          TextField(controller: _username, decoration: _inputDec(hint: 'نام کاربری', icon: Icons.person_rounded)),
-                          const SizedBox(height: 16),
-
-                          TextField(controller: _email, keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr, decoration: _inputDec(hint: 'پست الکترونیک', icon: Icons.email_rounded)),
-                          const SizedBox(height: 16),
-
-                          TextField(controller: _password, obscureText: true, textDirection: TextDirection.ltr, decoration: _inputDec(hint: 'رمز عبور', icon: Icons.lock_rounded)),
-                          const SizedBox(height: 16),
-
-                          // بخش تاریخ تولد با طراحی تمیزتر
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final horizontal = constraints.maxWidth < 420 ? 16.0 : 24.0;
+                final cardPadding = constraints.maxWidth < 360 ? 20.0 : 28.0;
+                return Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: Container(
+                        margin: EdgeInsets.symmetric(horizontal: horizontal),
+                        padding: EdgeInsets.all(cardPadding),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: .04),
+                              blurRadius: 30,
+                              offset: const Offset(0, 15),
                             ),
-                            child: Row(
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(child: Icon(Icons.person_add_rounded, size: 56, color: primaryGreen.withValues(alpha: .8))),
+                            const SizedBox(height: 14),
+                            const Text('ساخت حساب جدید', textAlign: TextAlign.center, style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: Color(0xFF30343B))),
+                            const SizedBox(height: 6),
+                            Text('اطلاعات خود را وارد کنید', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                            const SizedBox(height: 26),
+                            TextField(controller: _username, decoration: _inputDec(hint: 'نام کاربری', icon: Icons.person_rounded)),
+                            const SizedBox(height: 14),
+                            TextField(controller: _email, keyboardType: TextInputType.emailAddress, textDirection: TextDirection.ltr, decoration: _inputDec(hint: 'پست الکترونیک', icon: Icons.email_rounded)),
+                            const SizedBox(height: 14),
+                            TextField(controller: _password, obscureText: true, textDirection: TextDirection.ltr, decoration: _inputDec(hint: 'رمز عبور', icon: Icons.lock_rounded)),
+                            const SizedBox(height: 14),
+                            _buildBirthDateFields(),
+                            const SizedBox(height: 14),
+                            DropdownButtonFormField<String>(
+                              initialValue: _gender,
+                              hint: Text('جنسیت', style: TextStyle(color: Colors.grey.shade400)),
+                              onChanged: (v) => setState(() => _gender = v),
+                              decoration: _inputDec(hint: '', icon: Icons.wc_rounded),
+                              isExpanded: true,
+                              items: const [
+                                DropdownMenuItem(value: 'آقا', child: Text('آقا')),
+                                DropdownMenuItem(value: 'خانم', child: Text('خانم')),
+                              ],
+                            ),
+                            const SizedBox(height: 26),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed: _loading ? null : _signUp,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryGreen,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                ),
+                                child: _loading
+                                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                                    : const Text('ثبت‌نام', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Expanded(
-                                  child: DropdownButtonFormField<String>(
-                                    value: _day,
-                                    hint: Text('روز', style: TextStyle(color: Colors.grey.shade400)),
-                                    onChanged: (v) => setState(() => _day = v),
-                                    decoration: const InputDecoration(border: InputBorder.none),
-                                    items: List.generate(31, (i) => '${i + 1}').map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-                                  ),
-                                ),
-                                Container(width: 1, height: 30, color: Colors.grey.shade300),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                    child: DropdownButtonFormField<String>(
-                                      value: _month,
-                                      hint: Text('ماه', style: TextStyle(color: Colors.grey.shade400)),
-                                      onChanged: (v) => setState(() => _month = v),
-                                      decoration: const InputDecoration(border: InputBorder.none),
-                                      isExpanded: true,
-                                      items: ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند']
-                                          .map((m) => DropdownMenuItem(value: m, child: Text(m, style: const TextStyle(fontSize: 13)))).toList(),
-                                    ),
-                                  ),
-                                ),
-                                Container(width: 1, height: 30, color: Colors.grey.shade300),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 8.0),
-                                    child: TextField(
-                                      controller: _year,
-                                      keyboardType: TextInputType.number,
-                                      textAlign: TextAlign.center,
-                                      decoration: InputDecoration(
-                                        hintText: 'سال',
-                                        hintStyle: TextStyle(color: Colors.grey.shade400),
-                                        border: InputBorder.none,
-                                      ),
-                                    ),
-                                  ),
+                                Text('قبلاً ثبت‌نام کرده‌اید؟', style: TextStyle(color: Colors.grey.shade600)),
+                                TextButton(
+                                  onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                                  child: const Text('وارد شوید', style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold, fontSize: 15)),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          DropdownButtonFormField<String>(
-                            value: _gender,
-                            hint: Text('جنسیت', style: TextStyle(color: Colors.grey.shade400)),
-                            onChanged: (v) => setState(() => _gender = v),
-                            decoration: _inputDec(hint: '', icon: Icons.wc_rounded),
-                            items: ['آقا', 'خانم'].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
-                          ),
-                          const SizedBox(height: 32),
-
-                          // دکمه ثبت‌نام
-                          GestureDetector(
-                            onTap: _loading ? null : _signUp,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              width: double.infinity,
-                              height: 60,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                gradient: LinearGradient(colors: [primaryGreen, primaryTeal]),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: primaryTeal.withOpacity(0.3),
-                                    blurRadius: 15,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              alignment: Alignment.center,
-                              child: _loading
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Text('ثبت‌نام', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('قبلاً ثبت‌نام کرده‌اید؟', style: TextStyle(color: Colors.grey.shade600)),
-                          TextButton(
-                            onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-                            child: Text('وارد شوید', style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold, fontSize: 16)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ],
