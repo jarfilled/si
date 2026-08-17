@@ -1,8 +1,7 @@
 name: monitor
 description: "A new Flutter project."
 
-publish_to: 'none' 
-
+publish_to: 'none'
 
 version: 1.0.0+1
 
@@ -10,7 +9,6 @@ environment:
   sdk: ^3.5.4
 
 dependencies:
-
   camera: ^0.10.0
   google_mlkit_face_detection: ^0.12.0
   flutter_local_notifications: ^18.0.1
@@ -37,36 +35,26 @@ dependencies:
   record: ^7.1.1
   file_picker: ^12.0.0
   just_audio: 0.10.6
-
   flutter:
     sdk: flutter
-
-
-
   cupertino_icons: ^1.0.8
-
   monitor_channels:
     path: ./monitor_channels
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^4.0.0
 
-
-
-fonts:
-  - family: Vazirmatn
-    fonts:
-      - asset: assets/fonts/Vazirmatn-Regular.ttf
-      - asset: assets/fonts/Vazirmatn-Bold.ttf
-        weight: 700
-
-
 flutter:
-
   uses-material-design: true
+
+  fonts:
+    - family: Vazirmatn
+      fonts:
+        - asset: assets/fonts/Vazirmatn-Regular.ttf
+        - asset: assets/fonts/Vazirmatn-Bold.ttf
+          weight: 700
 
   assets:
     - assets/wrist_neck.png
