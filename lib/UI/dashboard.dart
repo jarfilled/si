@@ -32,11 +32,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late final List<Widget> pages;
   late final List<_NavItem> navItems;
   StreamSubscription<Map<String, dynamic>?>? statusSubscription;
+  Timer? monitoringPollTimer;
   bool serviceAlive = false;
-  DateTime? heartbeat;
   bool startingMonitoring = false;
 
-  bool get monitoringActive => serviceAlive && heartbeat != null && DateTime.now().difference(heartbeat!) < const Duration(seconds: 12);
+  bool get monitoringActive => serviceAlive;
 
   @override
   void initState() {
@@ -57,10 +57,30 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
     pages.add(const ProfilePage());
     navItems.add(const _NavItem(Icons.person_rounded, 'پروفایل'));
+
+    // Subscribe before starting the service so the first status event cannot
+    // be missed. The polling fallback also handles cases where the stream does
+    // not immediately deliver an event after app startup/resume.
+    _listenToService();
+    _refreshMonitoringState();
+    monitoringPollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _refreshMonitoringState();
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureMonitoringPermission());
   }
 
   void _goTo(int index) => setState(() => currentIndex = index);
+
+  Future<void> _refreshMonitoringState() async {
+    try {
+      final running = await BackgroundMonitorService.isRunning;
+      if (!mounted || running == serviceAlive) return;
+      setState(() => serviceAlive = running);
+    } catch (_) {
+      if (mounted && serviceAlive) setState(() => serviceAlive = false);
+    }
+  }
 
   Future<void> _ensureMonitoringPermission() async {
     final prefs = await SharedPreferences.getInstance();
@@ -93,10 +113,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         return;
       }
       await BackgroundMonitorService.saveHunchDivisor(divisor);
-      final running = await BackgroundMonitorService.isRunning;
       await BackgroundMonitorService.initialize();
-      if (!running) BackgroundMonitorService.start();
-      _listenToService();
+      if (!await BackgroundMonitorService.isRunning) {
+        BackgroundMonitorService.start();
+      }
+      await _refreshMonitoringState();
     } catch (e) {
       debugPrint('[Dashboard] monitoring error: $e');
       _message('فعال‌سازی پایش با خطا مواجه شد.', error: true);
@@ -109,10 +130,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     statusSubscription?.cancel();
     statusSubscription = BackgroundMonitorService.statusStream.listen((event) {
       if (!mounted || event == null) return;
-      setState(() {
-        serviceAlive = event['running'] == true;
-        heartbeat = DateTime.now();
-      });
+      final running = event['running'] == true;
+      if (running != serviceAlive) {
+        setState(() => serviceAlive = running);
+      }
     });
   }
 
@@ -166,6 +187,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void dispose() {
     statusSubscription?.cancel();
+    monitoringPollTimer?.cancel();
     super.dispose();
   }
 
@@ -338,7 +360,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
   Widget _overview() {
     return _card(child: LayoutBuilder(builder: (context, constraints) {
       final compact = constraints.maxWidth < 320;
-      final scoreView = SizedBox(width: compact ? 74 : 88, height: compact ? 74 : 88, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 8, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Column(mainAxisSize: MainAxisSize.min, children: [Text('$score', style: const TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Text('امتیاز', style: TextStyle(color: subtext, fontSize: 9))])]));
+      final scoreView = SizedBox(width: compact ? 74 : 88, height: compact ? 74 : 88, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 8, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Column(mainAxisSize: MainAxisSize.min, children: [Text('$score', style: const TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Text('امتیاز', style: TextStyle(color: subtext, fontSize: 9))])])));
       final copy = Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('وضعیت امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(loading ? 'در حال دریافت داده‌ها...' : _scoreMessage(), style: const TextStyle(color: subtext, fontSize: 10, height: 1.5)), const SizedBox(height: 9), Text('زمان صفحه: ${_minutes(today?.screenTime ?? 0)}', style: const TextStyle(color: teal, fontSize: 10, fontWeight: FontWeight.w800))]));
       return compact ? Column(children: [scoreView, const SizedBox(height: 12), Align(alignment: Alignment.centerRight, child: copy)]) : Row(children: [scoreView, const SizedBox(width: 15), copy]);
     }));
@@ -351,9 +373,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
       final stack = constraints.maxWidth < 390;
       final waterCard = _card(child: _waterContent());
       final socialCard = _card(child: _socialContent());
-      if (stack) {
-        return Column(children: [waterCard, const SizedBox(height: 10), socialCard]);
-      }
+      if (stack) return Column(children: [waterCard, const SizedBox(height: 10), socialCard]);
       return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: waterCard), const SizedBox(width: 10), Expanded(child: socialCard)]);
     });
   }
@@ -387,26 +407,12 @@ class _DashboardHomeState extends State<_DashboardHome> {
 
   Widget _socialChip(String label, String value) {
     final selected = socialCheckIn == label;
-    return InkWell(
-      onTap: () => _setSocialCheckIn(label),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-        decoration: BoxDecoration(color: selected ? mint : const Color(0xFFF7FAF9), borderRadius: BorderRadius.circular(10), border: Border.all(color: selected ? green.withValues(alpha: .35) : line)),
-        child: Text(value, style: TextStyle(color: selected ? green : subtext, fontSize: 9, fontWeight: FontWeight.w800)),
-      ),
-    );
+    return InkWell(onTap: () => _setSocialCheckIn(label), borderRadius: BorderRadius.circular(10), child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7), decoration: BoxDecoration(color: selected ? mint : const Color(0xFFF7FAF9), borderRadius: BorderRadius.circular(10), border: Border.all(color: selected ? green.withValues(alpha: .35) : line)), child: Text(value, style: TextStyle(color: selected ? green : subtext, fontSize: 9, fontWeight: FontWeight.w800))));
   }
 
   Widget _quickActions() {
     return LayoutBuilder(builder: (context, constraints) {
-      if (constraints.maxWidth < 330) {
-        return Column(children: [
-          _action('وضعیت بدن', Icons.accessibility_new_rounded, widget.onPosture),
-          const SizedBox(height: 8),
-          _action('تمرین کوتاه', Icons.fitness_center_rounded, widget.onExercise),
-        ]);
-      }
+      if (constraints.maxWidth < 330) return Column(children: [_action('وضعیت بدن', Icons.accessibility_new_rounded, widget.onPosture), const SizedBox(height: 8), _action('تمرین کوتاه', Icons.fitness_center_rounded, widget.onExercise)]);
       return Row(children: [Expanded(child: _action('وضعیت بدن', Icons.accessibility_new_rounded, widget.onPosture)), const SizedBox(width: 8), Expanded(child: _action('تمرین کوتاه', Icons.fitness_center_rounded, widget.onExercise))]);
     });
   }
