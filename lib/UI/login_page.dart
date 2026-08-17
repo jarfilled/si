@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -13,8 +13,15 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  final Color primaryGreen = const Color(0xFF42D2A7);
-  final Color darkTeal = const Color(0xFF145954);
+  static const Color primaryGreen = Color(0xFF42D2A7);
+  static const Color darkTeal = Color(0xFF145954);
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _signIn() async {
     setState(() => _isLoading = true);
@@ -34,13 +41,14 @@ class _LoginPageState extends State<LoginPage> {
         final gender = userData?['gender'] ?? 'male';
         final hasCalibrated = userData?['hunch_divisor'] != null;
 
-        if (hasCalibrated) {
-          Navigator.pushReplacementNamed(context, '/dashboard', arguments: gender);
-        } else {
-          Navigator.pushReplacementNamed(context, '/calibrate');
-        }
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(
+          context,
+          hasCalibrated ? '/dashboard' : '/calibrate',
+          arguments: gender,
+        );
       }
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -62,96 +70,68 @@ class _LoginPageState extends State<LoginPage> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF4F9F7),
-        body: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 30.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // آیکون یا لوگوی اپلیکیشن
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: primaryGreen.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.spa_rounded, size: 80, color: primaryGreen),
-                ),
-                const SizedBox(height: 30),
-                Text(
-                  'خوش آمدید',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: darkTeal,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'برای ادامه وارد حساب کاربری خود شوید',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 40),
-
-                // فیلد ایمیل
-                _buildTextField(
-                  controller: _emailController,
-                  label: 'ایمیل',
-                  icon: Icons.email_outlined,
-                ),
-                const SizedBox(height: 20),
-
-                // فیلد رمز عبور
-                _buildTextField(
-                  controller: _passwordController,
-                  label: 'رمز عبور',
-                  icon: Icons.lock_outline_rounded,
-                  isPassword: true,
-                ),
-                const SizedBox(height: 40),
-
-                // دکمه ورود
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryGreen,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    onPressed: _isLoading ? null : _signIn,
-                    child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                        'ورود به برنامه',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 380;
+              return Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 18 : 30, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(compact ? 16 : 20),
+                          decoration: BoxDecoration(
+                            color: primaryGreen.withValues(alpha: .15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.spa_rounded, size: compact ? 64 : 80, color: primaryGreen),
+                        ),
+                        SizedBox(height: compact ? 22 : 30),
+                        Text('خوش آمدید', style: TextStyle(fontSize: compact ? 25 : 28, fontWeight: FontWeight.w900, color: darkTeal)),
+                        const SizedBox(height: 8),
+                        Text('برای ادامه وارد حساب کاربری خود شوید', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                        SizedBox(height: compact ? 28 : 40),
+                        _buildTextField(controller: _emailController, label: 'ایمیل', icon: Icons.email_outlined),
+                        const SizedBox(height: 16),
+                        _buildTextField(controller: _passwordController, label: 'رمز عبور', icon: Icons.lock_outline_rounded, isPassword: true),
+                        SizedBox(height: compact ? 28 : 40),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryGreen,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
+                            onPressed: _isLoading ? null : _signIn,
+                            child: _isLoading
+                                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                                : const Text('ورود به برنامه', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text('حساب کاربری ندارید؟ ', style: TextStyle(color: Colors.grey[700])),
+                            GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, '/signup'),
+                              child: const Text('ثبت‌نام کنید', style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // لینک ثبت نام
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('حساب کاربری ندارید؟ ', style: TextStyle(color: Colors.grey[700])),
-                    GestureDetector(
-                      onTap: () => Navigator.pushNamed(context, '/signup'),
-                      child: Text(
-                        'ثبت‌نام کنید',
-                        style: TextStyle(color: primaryGreen, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                )
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -162,19 +142,13 @@ class _LoginPageState extends State<LoginPage> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
-    bool isPassword = false
+    bool isPassword = false,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          )
-        ],
+        boxShadow: const [BoxShadow(color: Color(0x05000000), blurRadius: 10, offset: Offset(0, 5))],
       ),
       child: TextField(
         controller: controller,
@@ -183,13 +157,10 @@ class _LoginPageState extends State<LoginPage> {
           labelText: label,
           labelStyle: TextStyle(color: Colors.grey[500]),
           prefixIcon: Icon(icon, color: primaryGreen),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide.none,
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
           filled: true,
           fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(vertical: 20),
+          contentPadding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
         ),
       ),
     );
