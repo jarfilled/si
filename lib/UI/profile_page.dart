@@ -107,11 +107,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => Directionality(textDirection: TextDirection.rtl, child: AlertDialog(
-      title: const Text('خروج از حساب'),
-      content: const Text('از حساب فعلی خارج می‌شوی و برای ورود دوباره به صفحه ورود منتقل می‌شوی.'),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: danger), child: const Text('خروج'))],
-    )));
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => Directionality(textDirection: TextDirection.rtl, child: AlertDialog(title: const Text('خروج از حساب'), content: const Text('از حساب فعلی خارج می‌شوی و برای ورود دوباره به صفحه ورود منتقل می‌شوی.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')), FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: danger), child: const Text('خروج'))])));
     if (confirmed != true) return;
     try { BackgroundMonitorService.stop(); if (await FlutterOverlayWindow.isActive()) await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
     await supabase.auth.signOut();
@@ -123,9 +119,10 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) { _message('دوربین در دسترس نیست.'); return; }
+      if (!mounted) return;
       await Navigator.push(context, MaterialPageRoute(builder: (_) => CalibrationScreen(cameras: cameras)));
-      await _load();
-    } catch (_) { _message('باز کردن کالیبراسیون ممکن نشد.'); }
+      if (mounted) await _load();
+    } catch (_) { if (mounted) _message('باز کردن کالیبراسیون ممکن نشد.'); }
   }
   Future<void> _openSettings() => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
   Future<void> _openExercise() => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExerciseCenterPage()));
@@ -137,7 +134,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _accountHeader() => _card(padding: const EdgeInsets.all(20), child: Column(children: [
     Row(children: [Container(width: 60, height: 60, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.person_rounded, color: Colors.white, size: 32)), const SizedBox(width: 13), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(username.isEmpty ? 'پروفایل شخصی' : '@$username', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: sub, fontSize: 12))])), IconButton(onPressed: _editProfile, tooltip: 'ویرایش اطلاعات', icon: const Icon(Icons.edit_rounded, color: text))]),
     const SizedBox(height: 16), Container(height: 1, color: line), const SizedBox(height: 13),
-    LayoutBuilder(builder: (_, c) { final compact = c.maxWidth < 330; return Row(children: [Expanded(child: _miniInfo(Icons.cake_outlined, age > 0 ? '$age سال' : 'ثبت نشده', 'سن', compact)), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.wc_outlined, gender == 'female' ? 'خانم' : 'آقا', 'جنسیت', compact)), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.tune_rounded, hunchDivisor > 0 ? 'فعال' : 'نیازمند', 'کالیبراسیون', compact))]); }),
+    LayoutBuilder(builder: (_, c) {
+      final compact = c.maxWidth < 330;
+      return Row(children: [Expanded(child: _miniInfo(Icons.cake_outlined, age > 0 ? '$age سال' : 'ثبت نشده', 'سن', compact)), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.wc_outlined, gender == 'female' ? 'خانم' : 'آقا', 'جنسیت', compact)), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.tune_rounded, hunchDivisor > 0 ? 'فعال' : 'نیازمند', 'کالیبراسیون', compact))]);
+    }),
   ]));
 
   Widget _miniInfo(IconData icon, String value, String label, bool compact) => Column(children: [Icon(icon, color: green, size: compact ? 17 : 19), const SizedBox(height: 5), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: compact ? 10 : 12, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: sub, fontSize: compact ? 8 : 10))]);
@@ -152,7 +152,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _healthSnapshot() {
     final score = today?.healthScore ?? 0, screen = today?.screenTime.round() ?? 0, posture = ((today?.hunch ?? 0) + (today?.neck ?? 0) + (today?.wrist ?? 0)).round();
-    return LayoutBuilder(builder: (_, c) { final narrow = c.maxWidth < 390; final metrics = [_metric('امتیاز امروز', '$score', Icons.favorite_rounded), _metric('زمان صفحه', '${screen}د', Icons.phone_android_rounded), _metric('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded)]; return narrow ? Column(children: [metrics[0], const SizedBox(height: 8), metrics[1], const SizedBox(height: 8), metrics[2]]) : Row(children: [Expanded(child: metrics[0]), const SizedBox(width: 8), Expanded(child: metrics[1]), const SizedBox(width: 8), Expanded(child: metrics[2])]); });
+    return LayoutBuilder(builder: (_, c) {
+      final narrow = c.maxWidth < 390;
+      final metrics = [_metric('امتیاز امروز', '$score', Icons.favorite_rounded), _metric('زمان صفحه', '${screen}د', Icons.phone_android_rounded), _metric('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded)];
+      return narrow ? Column(children: [metrics[0], const SizedBox(height: 8), metrics[1], const SizedBox(height: 8), metrics[2]]) : Row(children: [Expanded(child: metrics[0]), const SizedBox(width: 8), Expanded(child: metrics[1]), const SizedBox(width: 8), Expanded(child: metrics[2])]);
+    });
   }
   Widget _metric(String label, String value, IconData icon) => _card(padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 7), child: Column(children: [Icon(icon, color: green, size: 20), const SizedBox(height: 6), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: sub, fontSize: 9, fontWeight: FontWeight.w700))]));
 
@@ -161,7 +165,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) => Directionality(textDirection: TextDirection.rtl, child: Scaffold(backgroundColor: bg, body: SafeArea(child: loading ? const Center(child: CircularProgressIndicator(color: green)) : RefreshIndicator(color: green, onRefresh: _load, child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(18, 10, 18, 30), children: [
-    Row(children: [const Expanded(child: Text('پروفایل', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900))), IconButton(onPressed: _editProfile, tooltip: 'ویرایش اطلاعات', icon: const Icon(Icons.edit_outlined, color: text)), IconButton(onPressed: _logout, tooltip: 'خروج', icon: const Icon(Icons.logout_rounded, color: danger))]),
+    Row(children: [const Expanded(child: Text('پروفایل', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)),), IconButton(onPressed: _editProfile, tooltip: 'ویرایش اطلاعات', icon: const Icon(Icons.edit_outlined, color: text)), IconButton(onPressed: _logout, tooltip: 'خروج', icon: const Icon(Icons.logout_rounded, color: danger))]),
     const SizedBox(height: 12), _accountHeader(), const SizedBox(height: 18),
     _sectionTitle('اطلاعات حساب', 'اطلاعات واقعی حساب را ببین و از همین‌جا ویرایش کن.'), _accountDetails(), const SizedBox(height: 18),
     _sectionTitle('وضعیت امروز', 'خلاصه‌ای از داده‌هایی که سی همین امروز ثبت کرده است.'), _healthSnapshot(), const SizedBox(height: 18),
