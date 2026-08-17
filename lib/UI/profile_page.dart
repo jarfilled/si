@@ -12,6 +12,7 @@ import 'settings_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
@@ -37,15 +38,20 @@ class _ProfilePageState extends State<ProfilePage> {
   DateTime? lastCalibratedAt;
   double hunchDivisor = 0;
   DailyHealthMetric? today;
-  String? mood;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     try {
       final user = supabase.auth.currentUser;
-      if (user == null) { if (mounted) setState(() => loading = false); return; }
+      if (user == null) {
+        if (mounted) setState(() => loading = false);
+        return;
+      }
       final results = await Future.wait<dynamic>([
         supabase.from('users').select().eq('id', user.id).maybeSingle(),
         HealthDataRepository.instance.getDailyMetrics(days: 1),
@@ -64,20 +70,30 @@ class _ProfilePageState extends State<ProfilePage> {
         loading = false;
       });
     } catch (_) {
-      if (mounted) { setState(() => loading = false); _message('اطلاعات حساب بارگذاری نشد.'); }
+      if (mounted) {
+        setState(() => loading = false);
+        _message('اطلاعات حساب بارگذاری نشد.');
+      }
     }
   }
 
-  String _string(dynamic value, {String fallback = ''}) { final valueString = value?.toString().trim(); return valueString == null || valueString.isEmpty ? fallback : valueString; }
+  String _string(dynamic value, {String fallback = ''}) {
+    final result = value?.toString().trim();
+    return result == null || result.isEmpty ? fallback : result;
+  }
+
   double _number(dynamic value) => value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
   DateTime? _date(dynamic value) => value == null ? null : DateTime.tryParse(value.toString());
 
   int get age {
-    final p = birthDate.replaceAll('/', '-').split('-');
-    if (p.length != 3) return 0;
-    final y = int.tryParse(p[0]); final m = int.tryParse(p[1]); final d = int.tryParse(p[2]);
+    final parts = birthDate.replaceAll('/', '-').split('-');
+    if (parts.length != 3) return 0;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
     if (y == null || m == null || d == null) return 0;
-    final now = DateTime.now(); var result = now.year - y;
+    final now = DateTime.now();
+    var result = now.year - y;
     if (now.month < m || (now.month == m && now.day < d)) result--;
     return result < 0 ? 0 : result;
   }
@@ -90,61 +106,96 @@ class _ProfilePageState extends State<ProfilePage> {
     final birth = TextEditingController(text: birthDate);
     var selectedGender = gender;
     try {
-      await showDialog<void>(context: context, builder: (dialogContext) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          backgroundColor: card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text('اطلاعات شخصی', style: TextStyle(color: text, fontWeight: FontWeight.w900)),
-          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'نام و نام خانوادگی', prefixIcon: Icon(Icons.badge_outlined))),
-            const SizedBox(height: 12),
-            TextField(controller: userName, decoration: const InputDecoration(labelText: 'نام کاربری', prefixIcon: Icon(Icons.alternate_email_rounded))),
-            const SizedBox(height: 12),
-            TextField(controller: birth, keyboardType: TextInputType.datetime, decoration: const InputDecoration(labelText: 'تاریخ تولد', hintText: '2009-08-17', prefixIcon: Icon(Icons.cake_outlined))),
-            const SizedBox(height: 12),
-            StatefulBuilder(builder: (_, setLocal) => DropdownButtonFormField<String>(
-              value: selectedGender,
-              decoration: const InputDecoration(labelText: 'جنسیت', prefixIcon: Icon(Icons.wc_outlined)),
-              items: const [DropdownMenuItem(value: 'male', child: Text('آقا')), DropdownMenuItem(value: 'female', child: Text('خانم'))],
-              onChanged: (v) => setLocal(() => selectedGender = v ?? selectedGender),
-            )),
-          ])),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('انصراف')),
-            FilledButton(
-              onPressed: saving ? null : () async {
-                final user = supabase.auth.currentUser; if (user == null) return;
-                setState(() => saving = true);
-                try {
-                  await supabase.from('users').update({'full_name': name.text.trim(), 'username': userName.text.trim(), 'gender': selectedGender, 'birth_date': birth.text.trim(), 'last_active_at': DateTime.now().toIso8601String()}).eq('id', user.id);
-                  if (!mounted) return;
-                  setState(() { fullName = name.text.trim(); username = userName.text.trim(); gender = selectedGender; birthDate = birth.text.trim(); saving = false; });
-                  Navigator.pop(dialogContext); _message('اطلاعات حساب ذخیره شد.');
-                } catch (_) { if (mounted) { setState(() => saving = false); _message('ذخیره اطلاعات انجام نشد.'); } }
-              },
-              style: FilledButton.styleFrom(backgroundColor: green), child: const Text('ذخیره تغییرات'),
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: card,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Text('اطلاعات شخصی', style: TextStyle(color: text, fontWeight: FontWeight.w900)),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'نام و نام خانوادگی', prefixIcon: Icon(Icons.badge_outlined))),
+                const SizedBox(height: 12),
+                TextField(controller: userName, decoration: const InputDecoration(labelText: 'نام کاربری', prefixIcon: Icon(Icons.alternate_email_rounded))),
+                const SizedBox(height: 12),
+                TextField(controller: birth, keyboardType: TextInputType.datetime, decoration: const InputDecoration(labelText: 'تاریخ تولد', hintText: '2009-08-17', prefixIcon: Icon(Icons.cake_outlined))),
+                const SizedBox(height: 12),
+                StatefulBuilder(builder: (_, setLocal) => DropdownButtonFormField<String>(
+                  initialValue: selectedGender,
+                  decoration: const InputDecoration(labelText: 'جنسیت', prefixIcon: Icon(Icons.wc_outlined)),
+                  items: const [DropdownMenuItem(value: 'male', child: Text('آقا')), DropdownMenuItem(value: 'female', child: Text('خانم'))],
+                  onChanged: (value) => setLocal(() => selectedGender = value ?? selectedGender),
+                )),
+              ]),
             ),
-          ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('انصراف')),
+              FilledButton(
+                onPressed: saving ? null : () async {
+                  final user = supabase.auth.currentUser;
+                  if (user == null) return;
+                  setState(() => saving = true);
+                  try {
+                    await supabase.from('users').update({
+                      'full_name': name.text.trim(),
+                      'username': userName.text.trim(),
+                      'gender': selectedGender,
+                      'birth_date': birth.text.trim(),
+                      'last_active_at': DateTime.now().toIso8601String(),
+                    }).eq('id', user.id);
+                    if (!mounted) return;
+                    setState(() {
+                      fullName = name.text.trim();
+                      username = userName.text.trim();
+                      gender = selectedGender;
+                      birthDate = birth.text.trim();
+                      saving = false;
+                    });
+                    Navigator.pop(dialogContext);
+                    _message('اطلاعات حساب ذخیره شد.');
+                  } catch (_) {
+                    if (mounted) {
+                      setState(() => saving = false);
+                      _message('ذخیره اطلاعات انجام نشد.');
+                    }
+                  }
+                },
+                style: FilledButton.styleFrom(backgroundColor: green),
+                child: const Text('ذخیره تغییرات'),
+              ),
+            ],
+          ),
         ),
-      ));
-    } finally { name.dispose(); userName.dispose(); birth.dispose(); }
+      );
+    } finally {
+      name.dispose();
+      userName.dispose();
+      birth.dispose();
+    }
   }
 
   Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        title: const Text('خروج از حساب'),
-        content: const Text('از حساب فعلی خارج می‌شوی و برای ورود دوباره به صفحه ورود منتقل می‌شوی.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: danger), child: const Text('خروج')),
-        ],
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('خروج از حساب'),
+          content: const Text('از حساب فعلی خارج می‌شوی و برای ورود دوباره به صفحه ورود منتقل می‌شوی.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: danger), child: const Text('خروج')),
+          ],
+        ),
       ),
-    ));
+    );
     if (confirmed != true) return;
-    try { BackgroundMonitorService.stop(); if (await FlutterOverlayWindow.isActive()) await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
+    try {
+      BackgroundMonitorService.stop();
+      if (await FlutterOverlayWindow.isActive()) await FlutterOverlayWindow.closeOverlay();
+    } catch (_) {}
     await supabase.auth.signOut();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
@@ -153,31 +204,68 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _openCalibration() async {
     try {
       final cameras = await availableCameras();
-      if (cameras.isEmpty) { _message('دوربین در دسترس نیست.'); return; }
+      if (cameras.isEmpty) {
+        _message('دوربین در دسترس نیست.');
+        return;
+      }
       await Navigator.push(context, MaterialPageRoute(builder: (_) => CalibrationScreen(cameras: cameras)));
       await _load();
-    } catch (_) { _message('باز کردن کالیبراسیون ممکن نشد.'); }
+    } catch (_) {
+      _message('باز کردن کالیبراسیون ممکن نشد.');
+    }
   }
 
   Future<void> _openSettings() async => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
   Future<void> _openExercise() async => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExerciseCenterPage()));
-  void _message(String message) { if (!mounted) return; ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating)); }
 
-  Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(18)}) => Container(padding: padding, decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: line), boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 20, offset: const Offset(0, 7))]), child: child);
-  Widget _sectionTitle(String title, String subtitle) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(color: subtext, fontSize: 11))]));
+  void _message(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+  }
 
-  Widget _accountHeader() => _card(padding: const EdgeInsets.all(20), child: Column(children: [
-    Row(children: [
-      Container(width: 64, height: 64, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.person_rounded, color: Colors.white, size: 34)),
-      const SizedBox(width: 14),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(displayName, style: const TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(username.isEmpty ? 'پروفایل شخصی' : '@$username', style: const TextStyle(color: subtext, fontSize: 12))])),
-      IconButton(onPressed: _editProfile, icon: const Icon(Icons.edit_rounded, color: text)),
+  Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(18)}) => Container(
+    padding: padding,
+    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: line), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .035), blurRadius: 20, offset: const Offset(0, 7))]),
+    child: child,
+  );
+
+  Widget _sectionTitle(String title, String subtitle) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 3),
+      Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 11)),
     ]),
-    const SizedBox(height: 18), Container(height: 1, color: line), const SizedBox(height: 14),
-    Row(children: [Expanded(child: _miniInfo(Icons.cake_outlined, age > 0 ? '$age سال' : 'ثبت نشده', 'سن')), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.wc_outlined, gender == 'female' ? 'خانم' : 'آقا', 'جنسیت')), Container(width: 1, height: 34, color: line), Expanded(child: _miniInfo(Icons.tune_rounded, hunchDivisor > 0 ? 'فعال' : 'نیازمند', 'کالیبراسیون'))]),
-  ]));
+  );
 
-  Widget _miniInfo(IconData icon, String value, String label) => Column(children: [Icon(icon, color: green, size: 19), const SizedBox(height: 5), Text(value, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text(label, style: const TextStyle(color: subtext, fontSize: 10))]);
+  Widget _accountHeader() => _card(
+    padding: const EdgeInsets.all(20),
+    child: Column(children: [
+      Row(children: [
+        Container(width: 64, height: 64, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.person_rounded, color: Colors.white, size: 34)),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(username.isEmpty ? 'پروفایل شخصی' : '@$username', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 12))])),
+        IconButton(onPressed: _editProfile, icon: const Icon(Icons.edit_rounded, color: text)),
+      ]),
+      const SizedBox(height: 18),
+      Container(height: 1, color: line),
+      const SizedBox(height: 14),
+      LayoutBuilder(builder: (_, constraints) {
+        final compact = constraints.maxWidth < 330;
+        return Row(children: [
+          Expanded(child: _miniInfo(Icons.cake_outlined, age > 0 ? '$age سال' : 'ثبت نشده', 'سن', compact)),
+          Container(width: 1, height: 34, color: line),
+          Expanded(child: _miniInfo(Icons.wc_outlined, gender == 'female' ? 'خانم' : 'آقا', 'جنسیت', compact)),
+          Container(width: 1, height: 34, color: line),
+          Expanded(child: _miniInfo(Icons.tune_rounded, hunchDivisor > 0 ? 'فعال' : 'نیازمند', 'کالیبراسیون', compact)),
+        ]);
+      }),
+    ]),
+  );
+
+  Widget _miniInfo(IconData icon, String value, String label, bool compact) => Column(children: [Icon(icon, color: green, size: compact ? 17 : 19), const SizedBox(height: 5), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: compact ? 10 : 12, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: subtext, fontSize: compact ? 8 : 10))]);
 
   Widget _accountDetails() {
     final email = supabase.auth.currentUser?.email ?? 'ثبت نشده';
@@ -193,45 +281,91 @@ class _ProfilePageState extends State<ProfilePage> {
     ]));
   }
 
-  Widget _detail(IconData icon, String label, String value, {VoidCallback? onTap, bool editable = true}) => InkWell(onTap: editable ? onTap : null, borderRadius: BorderRadius.circular(14), child: Row(children: [Container(width: 40, height: 40, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green, size: 20)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: subtext, fontSize: 10)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w800))])), if (editable) const Icon(Icons.chevron_left_rounded, color: subtext)]));
+  Widget _detail(IconData icon, String label, String value, {VoidCallback? onTap, bool editable = true}) => InkWell(
+    onTap: editable ? onTap : null,
+    borderRadius: BorderRadius.circular(14),
+    child: Row(children: [
+      Container(width: 40, height: 40, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green, size: 20)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: subtext, fontSize: 10)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w800))])),
+      if (editable) const Icon(Icons.chevron_left_rounded, color: subtext),
+    ]),
+  );
 
   Widget _healthSnapshot() {
     final score = today?.healthScore ?? 0;
     final screen = today?.screenTime.round() ?? 0;
     final posture = ((today?.hunch ?? 0) + (today?.neck ?? 0) + (today?.wrist ?? 0)).round();
-    return Row(children: [Expanded(child: _metric('امتیاز امروز', '$score', Icons.favorite_rounded)), const SizedBox(width: 8), Expanded(child: _metric('صفحه', '${screen}د', Icons.phone_android_rounded)), const SizedBox(width: 8), Expanded(child: _metric('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded))]);
+    return LayoutBuilder(builder: (_, constraints) {
+      if (constraints.maxWidth < 390) {
+        return Column(children: [_metric('امتیاز امروز', '$score', Icons.favorite_rounded), const SizedBox(height: 8), _metric('زمان صفحه', '${screen}د', Icons.phone_android_rounded), const SizedBox(height: 8), _metric('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded)]);
+      }
+      return Row(children: [Expanded(child: _metric('امتیاز امروز', '$score', Icons.favorite_rounded)), const SizedBox(width: 8), Expanded(child: _metric('زمان صفحه', '${screen}د', Icons.phone_android_rounded)), const SizedBox(width: 8), Expanded(child: _metric('وضعیت بدن', '${posture}د', Icons.accessibility_new_rounded))]);
+    });
   }
 
-  Widget _metric(String label, String value, IconData icon) => _card(padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 7), child: Column(children: [Icon(icon, color: green, size: 20), const SizedBox(height: 6), Text(value, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(label, textAlign: TextAlign.center, style: const TextStyle(color: subtext, fontSize: 9, fontWeight: FontWeight.w700))]));
-
-  Widget _moodCard() {
-    const moods = {'خیلی خوب': '😄', 'خوب': '🙂', 'معمولی': '😐', 'خسته': '😮‍💨', 'بد': '😕'};
-    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Row(children: [Icon(Icons.psychology_alt_rounded, color: green, size: 20), SizedBox(width: 8), Text('حال امروز', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900))]),
-      const SizedBox(height: 5), const Text('یک ثبت کوتاه برای دنبال کردن حال روزانه.', style: TextStyle(color: subtext, fontSize: 11)), const SizedBox(height: 12),
-      Wrap(spacing: 6, runSpacing: 6, children: moods.entries.map((e) => ChoiceChip(selected: mood == e.key, label: Text('${e.value} ${e.key}'), onSelected: (_) { setState(() => mood = e.key); }, selectedColor: mint, side: BorderSide(color: mood == e.key ? green : line))).toList()),
-    ]));
-  }
+  Widget _metric(String label, String value, IconData icon) => _card(padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 7), child: Column(children: [Icon(icon, color: green, size: 20), const SizedBox(height: 6), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: subtext, fontSize: 9, fontWeight: FontWeight.w700))]));
 
   Widget _quickActions() => _card(child: Column(children: [
-    _action(Icons.tune_rounded, 'کالیبراسیون وضعیت بدن', hunchDivisor > 0 ? 'فعال • آخرین تنظیم: ${lastCalibratedAt == null ? 'نامشخص' : _formatDate(lastCalibratedAt!)}' : 'برای شروع پایش انجام دهید', _openCalibration),
+    _action(Icons.tune_rounded, 'کالیبراسیون وضعیت بدن', 'تنظیم دوباره آستانه تشخیص شخصی', _openCalibration),
     const Divider(height: 22, color: line),
-    _action(Icons.fitness_center_rounded, 'مرکز تمرین', 'تمرین‌های مرتبط با وضعیت بدنت', _openExercise),
+    _action(Icons.fitness_center_rounded, 'مرکز تمرین', 'تمرین‌های کوتاه متناسب با هدف تو', _openExercise),
     const Divider(height: 22, color: line),
     _action(Icons.settings_outlined, 'تنظیمات پایش', 'دوربین، هشدارها و محافظت از محتوا', _openSettings),
   ]));
 
-  Widget _action(IconData icon, String title, String subtitle, VoidCallback onTap) => InkWell(onTap: onTap, borderRadius: BorderRadius.circular(15), child: Row(children: [Container(width: 42, height: 42, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 10))])), const Icon(Icons.chevron_left_rounded, color: subtext)]));
+  Widget _action(IconData icon, String title, String subtitle, VoidCallback onTap) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(15),
+    child: Row(children: [
+      Container(width: 42, height: 42, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 10))])),
+      const Icon(Icons.chevron_left_rounded, color: subtext),
+    ]),
+  );
+
   String _formatDate(DateTime date) => '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
 
   @override
-  Widget build(BuildContext context) => Directionality(textDirection: TextDirection.rtl, child: Scaffold(backgroundColor: bg, body: SafeArea(child: loading ? const Center(child: CircularProgressIndicator(color: green)) : RefreshIndicator(color: green, onRefresh: _load, child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(18, 10, 18, 30), children: [
-    Row(children: [const Text('پروفایل', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Spacer(), IconButton(onPressed: _editProfile, tooltip: 'ویرایش اطلاعات', icon: const Icon(Icons.edit_outlined, color: text)), IconButton(onPressed: _logout, tooltip: 'خروج', icon: const Icon(Icons.logout_rounded, color: danger))]),
-    const SizedBox(height: 12), _accountHeader(), const SizedBox(height: 18),
-    _sectionTitle('اطلاعات حساب', 'اطلاعات واقعی حساب را ببین و از همین‌جا ویرایش کن.'), _accountDetails(), const SizedBox(height: 18),
-    _sectionTitle('وضعیت امروز', 'خلاصه‌ای از داده‌هایی که سی همین امروز ثبت کرده است.'), _healthSnapshot(), const SizedBox(height: 18),
-    _sectionTitle('سلامت شخصی', 'یک فضای کوچک برای بررسی وضعیت ذهنی روزانه.'), _moodCard(), const SizedBox(height: 18),
-    _sectionTitle('دسترسی سریع', 'ابزارهای اصلی را بدون تکرار و شلوغی در دسترس نگه داریم.'), _quickActions(), const SizedBox(height: 20),
-    OutlinedButton.icon(onPressed: _logout, icon: const Icon(Icons.logout_rounded, color: danger), label: const Text('خروج از حساب', style: TextStyle(color: danger, fontWeight: FontWeight.w800)), style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0x33D95C5C)), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)))),
-  ])))));
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
+          child: loading
+              ? const Center(child: CircularProgressIndicator(color: green))
+              : RefreshIndicator(
+                  color: green,
+                  onRefresh: _load,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
+                    children: [
+                      Row(children: [
+                        const Expanded(child: Text('پروفایل', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900))),
+                        IconButton(onPressed: _editProfile, tooltip: 'ویرایش اطلاعات', icon: const Icon(Icons.edit_outlined, color: text)),
+                        IconButton(onPressed: _logout, tooltip: 'خروج', icon: const Icon(Icons.logout_rounded, color: danger)),
+                      ]),
+                      const SizedBox(height: 12),
+                      _accountHeader(),
+                      const SizedBox(height: 18),
+                      _sectionTitle('اطلاعات حساب', 'اطلاعات واقعی حساب را ببین و از همین‌جا ویرایش کن.'),
+                      _accountDetails(),
+                      const SizedBox(height: 18),
+                      _sectionTitle('وضعیت امروز', 'خلاصه‌ای از داده‌هایی که سی همین امروز ثبت کرده است.'),
+                      _healthSnapshot(),
+                      const SizedBox(height: 18),
+                      _sectionTitle('دسترسی سریع', 'ابزارهای اصلی را بدون تکرار و شلوغی در دسترس نگه داریم.'),
+                      _quickActions(),
+                      const SizedBox(height: 20),
+                      OutlinedButton.icon(onPressed: _logout, icon: const Icon(Icons.logout_rounded, color: danger), label: const Text('خروج از حساب', style: TextStyle(color: danger, fontWeight: FontWeight.w800)), style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0x33D95C5C)), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)))),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
 }
