@@ -195,7 +195,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                         Icon(navItems[i].icon, size: 21, color: selected ? green : subtext),
                         const SizedBox(height: 3),
-                        Text(navItems[i].label, style: TextStyle(color: selected ? green : subtext, fontSize: 9, fontWeight: selected ? FontWeight.w900 : FontWeight.w600)),
+                        Flexible(child: Text(navItems[i].label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: selected ? green : subtext, fontSize: navItems.length > 4 ? 8.5 : 9, fontWeight: selected ? FontWeight.w900 : FontWeight.w600))),
                       ]),
                     ),
                   ),
@@ -236,10 +236,10 @@ class _DashboardHomeState extends State<_DashboardHome> {
   DailyHealthMetric? today;
   bool loading = true;
   int water = 0;
-  String? mood;
+  bool socialDone = false;
 
   String _waterKey() { final d = DateTime.now(); return 'si_water_${d.year}_${d.month}_${d.day}'; }
-  String _moodKey() { final d = DateTime.now(); return 'si_mood_${d.year}_${d.month}_${d.day}'; }
+  String _socialKey() { final d = DateTime.now(); return 'si_social_${d.year}_${d.month}_${d.day}'; }
 
   @override
   void initState() { super.initState(); _load(); }
@@ -252,7 +252,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
       setState(() {
         today = rows.isEmpty ? null : DailyHealthMetric.fromMap(rows.first);
         water = prefs.getInt(_waterKey()) ?? 0;
-        mood = prefs.getString(_moodKey());
+        socialDone = prefs.getBool(_socialKey()) ?? false;
         loading = false;
       });
     } catch (_) {
@@ -268,10 +268,11 @@ class _DashboardHomeState extends State<_DashboardHome> {
     if (mounted) setState(() => water = next);
   }
 
-  Future<void> _setMood(String value) async {
+  Future<void> _markSocialConnection() async {
+    final next = !socialDone;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_moodKey(), value);
-    if (mounted) setState(() => mood = value);
+    await prefs.setBool(_socialKey(), next);
+    if (mounted) setState(() => socialDone = next);
   }
 
   double get risk => today == null ? 0 : today!.neck + today!.hunch + today!.wrist + today!.tooClose + today!.badLight;
@@ -294,7 +295,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
   }
 
   Widget _metric(String title, String value, IconData icon, Color color) {
-    return Expanded(child: _card(padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6), child: Column(children: [Icon(icon, color: color, size: 19), const SizedBox(height: 6), Text(value, style: const TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(title, textAlign: TextAlign.center, style: const TextStyle(color: subtext, fontSize: 9))])));
+    return Expanded(child: _card(padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6), child: Column(children: [Icon(icon, color: color, size: 19), const SizedBox(height: 6), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(color: subtext, fontSize: 9))])));
   }
 
   @override
@@ -306,7 +307,7 @@ class _DashboardHomeState extends State<_DashboardHome> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
         children: [
-          Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_greeting(), style: const TextStyle(color: subtext, fontSize: 11)), const SizedBox(height: 3), const Text('امروزت را بهتر مدیریت کن', style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900))])), Container(width: 42, height: 42, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 21))]),
+          Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_greeting(), style: const TextStyle(color: subtext, fontSize: 11)), const SizedBox(height: 3), const Text('امروزت را بهتر مدیریت کن', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900))])), Container(width: 42, height: 42, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 21))]),
           const SizedBox(height: 14),
           _monitorCard(),
           const SizedBox(height: 12),
@@ -331,35 +332,69 @@ class _DashboardHomeState extends State<_DashboardHome> {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(gradient: LinearGradient(colors: active ? const [green, teal] : const [Color(0xFF9AA4AD), Color(0xFF6E7983)]), borderRadius: BorderRadius.circular(22)),
-      child: Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .18), shape: BoxShape.circle), child: Icon(active ? Icons.radar_rounded : Icons.radar_outlined, color: Colors.white)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(active ? 'پایش فعال است' : 'پایش فعال نیست', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(active ? 'سی در حال ثبت الگوهای سلامت توست.' : 'برای دریافت گزارش روزانه، پایش را فعال کن.', style: const TextStyle(color: Colors.white70, fontSize: 10))])), Container(width: 9, height: 9, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]),
+      child: Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .18), shape: BoxShape.circle), child: Icon(active ? Icons.radar_rounded : Icons.radar_outlined, color: Colors.white)), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(active ? 'پایش فعال است' : 'پایش فعال نیست', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(active ? 'سی در حال ثبت الگوهای سلامت توست.' : 'برای دریافت گزارش روزانه، پایش را فعال کن.', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70, fontSize: 10))])), Container(width: 9, height: 9, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]),
     );
   }
 
   Widget _overview() {
-    return _card(child: Row(children: [SizedBox(width: 88, height: 88, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 8, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Column(mainAxisSize: MainAxisSize.min, children: [Text('$score', style: const TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900)), const Text('امتیاز', style: TextStyle(color: subtext, fontSize: 9))])])), const SizedBox(width: 15), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('وضعیت امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(loading ? 'در حال دریافت داده‌ها...' : _scoreMessage(), style: const TextStyle(color: subtext, fontSize: 10, height: 1.5)), const SizedBox(height: 9), Text('زمان صفحه: ${_minutes(today?.screenTime ?? 0)}', style: const TextStyle(color: teal, fontSize: 10, fontWeight: FontWeight.w800))]))]));
+    return _card(child: LayoutBuilder(builder: (_, constraints) {
+      final compact = constraints.maxWidth < 320;
+      final scoreView = SizedBox(width: compact ? 76 : 88, height: compact ? 76 : 88, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 8, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Column(mainAxisSize: MainAxisSize.min, children: [Text('$score', style: TextStyle(color: text, fontSize: compact ? 20 : 23, fontWeight: FontWeight.w900)), const Text('امتیاز', style: TextStyle(color: subtext, fontSize: 9))])]));
+      return Row(children: [scoreView, const SizedBox(width: 14), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('وضعیت امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 5), Text(loading ? 'در حال دریافت داده‌ها...' : _scoreMessage(), maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 10, height: 1.5)), const SizedBox(height: 9), Text('زمان صفحه: ${_minutes(today?.screenTime ?? 0)}', style: const TextStyle(color: teal, fontSize: 10, fontWeight: FontWeight.w800))]))]);
+    }));
   }
 
   String _scoreMessage() { if (score >= 85) return 'عالیه؛ الگوی امروزت در وضعیت خوبی قرار دارد.'; if (score >= 65) return 'خوبه، اما چند استراحت کوتاه می‌تواند وضعیتت را بهتر کند.'; return 'امروز به وضعیت بدن و زمان استراحتت بیشتر توجه کن.'; }
 
   Widget _dailySupport() {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Row(children: [Icon(Icons.water_drop_rounded, color: teal, size: 18), SizedBox(width: 6), Text('آب امروز', style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Text('$water/8 لیوان', style: const TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 6), ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: water / 8, minHeight: 5, backgroundColor: line, valueColor: const AlwaysStoppedAnimation(teal))), const SizedBox(height: 8), SizedBox(width: double.infinity, child: OutlinedButton(onPressed: water >= 8 ? null : _addWater, style: OutlinedButton.styleFrom(foregroundColor: teal, side: const BorderSide(color: teal), padding: const EdgeInsets.symmetric(vertical: 7)), child: const Text('+ یک لیوان', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800))))])),
-      const SizedBox(width: 8),
-      Expanded(child: _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Row(children: [Icon(Icons.psychology_alt_rounded, color: green, size: 18), SizedBox(width: 6), Text('حال امروز', style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Text(mood ?? 'هنوز ثبت نشده', style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 7), Wrap(spacing: 3, children: ['😄', '🙂', '😐', '😮‍💨', '😕'].map((emoji) => InkWell(onTap: () => _setMood(emoji), child: Padding(padding: const EdgeInsets.all(3), child: Text(emoji, style: const TextStyle(fontSize: 16))))).toList())])))
-    ]);
+    return LayoutBuilder(builder: (context, constraints) {
+      final stacked = constraints.maxWidth < 430;
+      final waterCard = _waterCard();
+      final socialCard = _socialCard();
+      if (stacked) {
+        return Column(children: [waterCard, const SizedBox(height: 10), socialCard]);
+      }
+      return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: waterCard), const SizedBox(width: 8), Expanded(child: socialCard)]);
+    });
+  }
+
+  Widget _waterCard() {
+    final progress = (water / 8).clamp(0, 1).toDouble();
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Row(children: [Icon(Icons.water_drop_rounded, color: teal, size: 18), SizedBox(width: 6), Expanded(child: Text('آب امروز', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900)))]),
+      const SizedBox(height: 8),
+      Text('$water/8 لیوان', style: const TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 6),
+      ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: progress, minHeight: 5, backgroundColor: line, valueColor: const AlwaysStoppedAnimation(teal))),
+      const SizedBox(height: 9),
+      SizedBox(width: double.infinity, child: OutlinedButton(onPressed: water >= 8 ? null : _addWater, style: OutlinedButton.styleFrom(foregroundColor: teal, side: const BorderSide(color: teal), minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7)), child: const FittedBox(fit: BoxFit.scaleDown, child: Text('+ یک لیوان', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800))))),
+    ]));
+  }
+
+  Widget _socialCard() {
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [Icon(socialDone ? Icons.check_circle_rounded : Icons.people_alt_rounded, color: green, size: 18), const SizedBox(width: 6), const Expanded(child: Text('ارتباط اجتماعی', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900)))]),
+      const SizedBox(height: 7),
+      Text(socialDone ? 'امروز برای ارتباط با یک نفر وقت گذاشتی.' : 'امروز با یک دوست یا یکی از نزدیکانت قرار بگذار.', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: subtext, fontSize: 10, height: 1.55)),
+      const SizedBox(height: 9),
+      SizedBox(width: double.infinity, child: OutlinedButton(onPressed: _markSocialConnection, style: OutlinedButton.styleFrom(foregroundColor: green, side: const BorderSide(color: green), minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7)), child: Text(socialDone ? 'انجام شد ✓' : 'امروز انجامش می‌دهم', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)))),
+    ]));
   }
 
   Widget _quickActions() {
-    return Row(children: [Expanded(child: _action('وضعیت بدن', Icons.accessibility_new_rounded, widget.onPosture)), const SizedBox(width: 8), Expanded(child: _action('تمرین کوتاه', Icons.fitness_center_rounded, widget.onExercise))]);
+    return LayoutBuilder(builder: (_, constraints) {
+      if (constraints.maxWidth < 390) return Column(children: [_action('وضعیت بدن', Icons.accessibility_new_rounded, widget.onPosture), const SizedBox(height: 8), _action('تمرین کوتاه', Icons.fitness_center_rounded, widget.onExercise)]);
+      return Row(children: [Expanded(child: _action('وضعیت بدن', Icons.accessibility_new_rounded, widget.onPosture)), const SizedBox(width: 8), Expanded(child: _action('تمرین کوتاه', Icons.fitness_center_rounded, widget.onExercise))]);
+    });
   }
 
   Widget _action(String title, IconData icon, VoidCallback onTap) {
-    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(20), child: _card(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14), child: Row(children: [Container(width: 34, height: 34, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green, size: 18)), const SizedBox(width: 9), Expanded(child: Text(title, style: const TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w900))), const Icon(Icons.chevron_left_rounded, color: subtext, size: 19)])));
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(20), child: _card(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14), child: Row(children: [Container(width: 34, height: 34, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: Icon(icon, color: green, size: 18)), const SizedBox(width: 9), Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w900))), const Icon(Icons.chevron_left_rounded, color: subtext, size: 19)])));
   }
 
   Widget _recommendation() {
     final title = score >= 85 ? 'همین روند را حفظ کن' : 'یک استراحت کوتاه داشته باش';
     final body = score >= 85 ? 'آب کافی بنوش و در طول استفاده از گوشی وضعیت گردن و مچ را هر چند دقیقه تغییر بده.' : 'چند دقیقه از صفحه فاصله بگیر، شانه‌ها را آزاد کن و یک حرکت کششی کوتاه انجام بده.';
-    return _card(child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 40, height: 40, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.lightbulb_outline_rounded, color: Colors.white, size: 20)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(body, style: const TextStyle(color: subtext, fontSize: 10, height: 1.6))]))]));
+    return _card(child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 40, height: 40, decoration: const BoxDecoration(gradient: LinearGradient(colors: [green, teal]), shape: BoxShape.circle), child: const Icon(Icons.lightbulb_outline_rounded, color: Colors.white, size: 20)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(body, style: const TextStyle(color: subtext, fontSize: 10, height: 1.6))]))]));
   }
 }
