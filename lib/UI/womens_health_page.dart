@@ -1,1358 +1,343 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class WomensHealthPage extends StatefulWidget {
-  const WomensHealthPage({Key? key}) : super(key: key);
+  const WomensHealthPage({super.key});
 
   @override
   State<WomensHealthPage> createState() => _WomensHealthPageState();
 }
 
 class _WomensHealthPageState extends State<WomensHealthPage> {
-  final Color primaryGreen = const Color(0xFF42D2A7);
-  final Color darkTeal = const Color(0xFF145954);
-  final Color bgColor = const Color(0xFFF7F9F9);
-  final Color softPink = const Color(0xFFFFA5B7);
-  final Color lightPink = const Color(0xFFFFEEF2);
-  final Color mutedText = const Color(0xFF71807F);
+  static const green = Color(0xFF42D2A7);
+  static const teal = Color(0xFF45C4D0);
+  static const darkTeal = Color(0xFF145954);
+  static const bg = Color(0xFFF7F9F9);
+  static const pink = Color(0xFFFFA5B7);
+  static const lightPink = Color(0xFFFFEEF2);
+  static const muted = Color(0xFF71807F);
+  static const line = Color(0xFFE8EFEC);
 
-  int painLevel = 5;
-  int moodLevel = 3;
-  int energyLevel = 3;
-
-  bool heatTried = false;
-  bool hydrationTried = false;
-  bool movementTried = false;
+  int pain = 5;
+  int mood = 3;
+  int energy = 3;
+  bool heat = false;
+  bool hydration = false;
+  bool movement = false;
+  bool socialReminder = false;
+  final TextEditingController noteController = TextEditingController();
 
   final List<double> painHistory = [3, 4, 4, 6, 5, 7, 5];
   final List<double> moodHistory = [4, 3, 3, 2, 3, 2, 3];
   final List<double> energyHistory = [4, 4, 3, 2, 2, 3, 3];
 
   @override
+  void dispose() {
+    noteController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: bg,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
-          title: Text(
-            'سلامت و قاعدگی',
-            style: TextStyle(
-              color: darkTeal,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          iconTheme: IconThemeData(color: darkTeal),
+          title: const Text('سلامت و قاعدگی', style: TextStyle(color: darkTeal, fontWeight: FontWeight.w900)),
+          iconTheme: const IconThemeData(color: darkTeal),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 5, 20, 35),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildCycleOverview(),
-
-              const SizedBox(height: 22),
-
-              _buildPmsStatusCard(),
-
-              const SizedBox(height: 28),
-
-              _sectionTitle('وضعیت امروز'),
-
-              const SizedBox(height: 14),
-
-              _buildPainCard(),
-
-              const SizedBox(height: 18),
-
-              _buildMoodEnergyCard(),
-
-              const SizedBox(height: 28),
-
-              _sectionTitle('روند علائم'),
-
-              const SizedBox(height: 14),
-
-              _buildPainChartCard(),
-
-              const SizedBox(height: 16),
-
-              _buildMoodChartCard(),
-
-              const SizedBox(height: 28),
-
-              _sectionTitle('چه چیزی می‌تواند کمک کند؟'),
-
-              const SizedBox(height: 14),
-
-              _buildPainManagementCard(),
-
-              const SizedBox(height: 16),
-
-              _buildDistractionCard(),
-
-              const SizedBox(height: 28),
-
-              _sectionTitle('ثبت روزانه'),
-
-              const SizedBox(height: 14),
-
-              _buildDailyLogCard(),
-
-              const SizedBox(height: 24),
-
-              _buildSafetyCard(),
-            ],
-          ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = constraints.maxWidth >= 700;
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(horizontal ? 28 : 16, 4, horizontal ? 28 : 16, 32),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _cycleOverview(),
+                      const SizedBox(height: 14),
+                      _statusCard(),
+                      const SizedBox(height: 20),
+                      _section('وضعیت امروز'),
+                      const SizedBox(height: 10),
+                      if (horizontal)
+                        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Expanded(child: _painCard()),
+                          const SizedBox(width: 12),
+                          Expanded(child: _moodEnergyCard()),
+                        ])
+                      else ...[
+                        _painCard(),
+                        const SizedBox(height: 12),
+                        _moodEnergyCard(),
+                      ],
+                      const SizedBox(height: 20),
+                      _section('روند علائم'),
+                      const SizedBox(height: 10),
+                      if (horizontal)
+                        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Expanded(child: _chartCard('روند درد', '۷ روز گذشته', painHistory, 10, pink)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _chartCard('خلق‌وخو و انرژی', 'مقایسه هفت روز گذشته', moodHistory, 5, green, secondary: energyHistory)),
+                        ])
+                      else ...[
+                        _chartCard('روند درد', '۷ روز گذشته', painHistory, 10, pink),
+                        const SizedBox(height: 12),
+                        _chartCard('خلق‌وخو و انرژی', 'مقایسه هفت روز گذشته', moodHistory, 5, green, secondary: energyHistory),
+                      ],
+                      const SizedBox(height: 20),
+                      _section('مراقبت امروز'),
+                      const SizedBox(height: 10),
+                      _careCard(),
+                      const SizedBox(height: 12),
+                      _socialCard(),
+                      const SizedBox(height: 20),
+                      _dailyLog(),
+                      const SizedBox(height: 12),
+                      _safetyCard(),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _sectionTitle(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: darkTeal,
-      ),
-    );
-  }
+  Widget _section(String title) => Text(title, style: const TextStyle(color: darkTeal, fontSize: 18, fontWeight: FontWeight.w900));
 
-  // ---------------------------------------------------------------------------
-  // CYCLE OVERVIEW
-  // ---------------------------------------------------------------------------
-
-  Widget _buildCycleOverview() {
-    const int currentDay = 14;
-    const int cycleLength = 28;
-
+  Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(16)}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: softPink.withOpacity(0.12),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: lightPink,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(
-                  Icons.calendar_month_rounded,
-                  color: softPink,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'چرخه فعلی',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: mutedText,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'روز $currentDay از حدود $cycleLength روز',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: darkTeal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _phaseBadge('فاز میانی'),
-            ],
-          ),
-
-          const SizedBox(height: 22),
-
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: LinearProgressIndicator(
-              value: currentDay / cycleLength,
-              minHeight: 11,
-              backgroundColor: bgColor,
-              valueColor: AlwaysStoppedAnimation<Color>(softPink),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'شروع چرخه',
-                style: TextStyle(fontSize: 11, color: mutedText),
-              ),
-              Text(
-                'روز $currentDay',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: softPink,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'چرخه بعدی',
-                style: TextStyle(fontSize: 11, color: mutedText),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _phaseBadge(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: lightPink,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: softPink,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // PMS STATUS
-  // ---------------------------------------------------------------------------
-
-  Widget _buildPmsStatusCard() {
-    final bool significantSymptoms = painLevel >= 7 || moodLevel <= 2;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            softPink.withOpacity(0.18),
-            primaryGreen.withOpacity(0.08),
-          ],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: softPink.withOpacity(0.22),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 55,
-            height: 55,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              significantSymptoms
-                  ? Icons.favorite_border_rounded
-                  : Icons.spa_rounded,
-              color: softPink,
-              size: 29,
-            ),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  significantSymptoms
-                      ? 'امروز کمی بیشتر مراقب خودت باش'
-                      : 'وضعیت امروزت ثبت شد',
-                  style: TextStyle(
-                    color: darkTeal,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  significantSymptoms
-                      ? 'علائم ثبت‌شده نشان می‌دهند بهتر است امروز فشار کمتری به خودت وارد کنی.'
-                      : 'با ثبت روزانه علائم، سی می‌تواند الگوی علائم تو را در چرخه‌های بعدی بهتر نشان دهد.',
-                  style: TextStyle(
-                    color: mutedText,
-                    fontSize: 12,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // PAIN
-  // ---------------------------------------------------------------------------
-
-  Widget _buildPainCard() {
-    return _whiteCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconBox(
-                Icons.monitor_heart_outlined,
-                softPink,
-                lightPink,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'میزان درد امروز',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: darkTeal,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'شدت درد را از ۰ تا ۱۰ مشخص کن',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: mutedText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '$painLevel/10',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: _painColor(painLevel),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          SliderTheme(
-            data: SliderThemeData(
-              activeTrackColor: _painColor(painLevel),
-              inactiveTrackColor: bgColor,
-              thumbColor: _painColor(painLevel),
-              overlayColor: _painColor(painLevel).withOpacity(0.12),
-              trackHeight: 8,
-            ),
-            child: Slider(
-              min: 0,
-              max: 10,
-              divisions: 10,
-              value: painLevel.toDouble(),
-              onChanged: (value) {
-                setState(() {
-                  painLevel = value.round();
-                });
-              },
-            ),
-          ),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'بدون درد',
-                style: TextStyle(fontSize: 10, color: mutedText),
-              ),
-              Text(
-                'متوسط',
-                style: TextStyle(fontSize: 10, color: mutedText),
-              ),
-              Text(
-                'شدید',
-                style: TextStyle(fontSize: 10, color: mutedText),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
-          _buildPainInterpretation(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPainInterpretation() {
-    String title;
-    String description;
-    IconData icon;
-
-    if (painLevel <= 2) {
-      title = 'درد خفیف';
-      description =
-      'اگر فعالیت‌های روزانه‌ات بدون مشکل انجام می‌شوند، استراحت کوتاه و مراقبت معمول کافی است.';
-      icon = Icons.sentiment_satisfied_alt_rounded;
-    } else if (painLevel <= 5) {
-      title = 'درد قابل توجه';
-      description =
-      'می‌توانی شدت فعالیت را کمتر کنی و از روش‌های ساده برای راحت‌تر شدن استفاده کنی.';
-      icon = Icons.sentiment_neutral_rounded;
-    } else if (painLevel <= 7) {
-      title = 'درد نسبتاً شدید';
-      description =
-      'اگر درد تمرکز یا فعالیت روزانه‌ات را مختل می‌کند، امروز زمان خوبی برای کاهش فشار و مراقبت از خودت است.';
-      icon = Icons.sentiment_dissatisfied_rounded;
-    } else {
-      title = 'درد شدید';
-      description =
-      'اگر این شدت درد برایت غیرمعمول است، ادامه‌دار می‌شود یا فعالیت‌های معمولت را مختل کرده، بهتر است با یک متخصص سلامت صحبت کنی.';
-      icon = Icons.warning_amber_rounded;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _painColor(painLevel).withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: _painColor(painLevel),
-            size: 25,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: darkTeal,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    color: mutedText,
-                    fontSize: 11,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _painColor(int value) {
-    if (value <= 2) return primaryGreen;
-    if (value <= 5) return Colors.orangeAccent;
-    if (value <= 7) return Colors.deepOrangeAccent;
-    return Colors.redAccent;
-  }
-
-  // ---------------------------------------------------------------------------
-  // MOOD + ENERGY
-  // ---------------------------------------------------------------------------
-
-  Widget _buildMoodEnergyCard() {
-    return _whiteCard(
-      child: Column(
-        children: [
-          _buildMetricSlider(
-            title: 'خلق‌وخو',
-            subtitle: 'امروز از نظر روحی چطوری؟',
-            icon: Icons.mood_rounded,
-            color: Colors.orangeAccent,
-            value: moodLevel,
-            onChanged: (value) {
-              setState(() {
-                moodLevel = value;
-              });
-            },
-          ),
-          const SizedBox(height: 22),
-          _buildMetricSlider(
-            title: 'انرژی',
-            subtitle: 'چقدر انرژی برای فعالیت داری؟',
-            icon: Icons.bolt_rounded,
-            color: primaryGreen,
-            value: energyLevel,
-            onChanged: (value) {
-              setState(() {
-                energyLevel = value;
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricSlider({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required int value,
-    required ValueChanged<int> onChanged,
-  }) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            _iconBox(
-              icon,
-              color,
-              color.withOpacity(0.10),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: darkTeal,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: mutedText,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              '$value/5',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderThemeData(
-            activeTrackColor: color,
-            inactiveTrackColor: bgColor,
-            thumbColor: color,
-            trackHeight: 6,
-          ),
-          child: Slider(
-            min: 1,
-            max: 5,
-            divisions: 4,
-            value: value.toDouble(),
-            onChanged: (newValue) {
-              onChanged(newValue.round());
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // CHARTS
-  // ---------------------------------------------------------------------------
-
-  Widget _buildPainChartCard() {
-    return _chartCard(
-      title: 'روند درد',
-      subtitle: '۷ روز گذشته',
-      icon: Icons.show_chart_rounded,
-      color: softPink,
-      data: painHistory,
-      maxValue: 10,
-      labels: const ['۷ روز پیش', 'امروز'],
-    );
-  }
-
-  Widget _buildMoodChartCard() {
-    return _chartCard(
-      title: 'روند خلق‌وخو و انرژی',
-      subtitle: 'مقایسه هفت روز گذشته',
-      icon: Icons.insights_rounded,
-      color: primaryGreen,
-      data: moodHistory,
-      secondaryData: energyHistory,
-      maxValue: 5,
-      labels: const ['۷ روز پیش', 'امروز'],
-    );
-  }
-
-  Widget _chartCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required List<double> data,
-    required double maxValue,
-    required List<String> labels,
-    List<double>? secondaryData,
-  }) {
-    return _whiteCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _iconBox(
-                icon,
-                color,
-                color.withOpacity(0.10),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: darkTeal,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: mutedText,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          SizedBox(
-            height: 150,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _LineChartPainter(
-                primaryData: data,
-                secondaryData: secondaryData,
-                maxValue: maxValue,
-                primaryColor: color,
-                secondaryColor: secondaryData != null
-                    ? softPink
-                    : null,
-                gridColor: bgColor,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                labels[0],
-                style: TextStyle(
-                  color: mutedText,
-                  fontSize: 10,
-                ),
-              ),
-              Text(
-                labels[1],
-                style: TextStyle(
-                  color: mutedText,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-
-          if (secondaryData != null) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _chartLegend(primaryGreen, 'خلق‌وخو'),
-                const SizedBox(width: 18),
-                _chartLegend(softPink, 'انرژی'),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _chartLegend(Color color, String text) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 10,
-            color: mutedText,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // PAIN MANAGEMENT
-  // ---------------------------------------------------------------------------
-
-  Widget _buildPainManagementCard() {
-    return _whiteCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'چند گزینه ساده برای امتحان کردن',
-            style: TextStyle(
-              color: darkTeal,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'می‌توانی مواردی را که امتحان کرده‌ای علامت بزنی تا سی بهتر متوجه شود چه چیزهایی برایت مفید بوده‌اند.',
-            style: TextStyle(
-              color: mutedText,
-              fontSize: 11,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 15),
-
-          _buildActionTile(
-            icon: Icons.local_fire_department_outlined,
-            title: 'گرمای ملایم',
-            description: 'استفاده از کیسه آب گرم می‌تواند به آرام شدن گرفتگی‌ها کمک کند.',
-            color: softPink,
-            checked: heatTried,
-            onTap: () {
-              setState(() {
-                heatTried = !heatTried;
-              });
-            },
-          ),
-
-          _buildActionTile(
-            icon: Icons.water_drop_outlined,
-            title: 'آب کافی',
-            description: 'نوشیدن مایعات کافی و داشتن وعده‌های منظم می‌تواند کمک‌کننده باشد.',
-            color: primaryGreen,
-            checked: hydrationTried,
-            onTap: () {
-              setState(() {
-                hydrationTried = !hydrationTried;
-              });
-            },
-          ),
-
-          _buildActionTile(
-            icon: Icons.directions_walk_rounded,
-            title: 'حرکت سبک',
-            description: 'پیاده‌روی یا کشش سبک، اگر بدنت اجازه می‌دهد، می‌تواند گزینه خوبی باشد.',
-            color: Colors.orangeAccent,
-            checked: movementTried,
-            onTap: () {
-              setState(() {
-                movementTried = !movementTried;
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionTile({
-    required IconData icon,
-    required String title,
-    required String description,
-    required Color color,
-    required bool checked,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: checked
-              ? color.withOpacity(0.08)
-              : bgColor,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(
-            color: checked
-                ? color.withOpacity(0.35)
-                : Colors.transparent,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 21,
-              ),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: darkTeal,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      color: mutedText,
-                      fontSize: 10,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              checked
-                  ? Icons.check_circle_rounded
-                  : Icons.circle_outlined,
-              color: checked ? color : Colors.grey[400],
-              size: 22,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // DISTRACTION / SOCIAL SUPPORT
-  // ---------------------------------------------------------------------------
-
-  Widget _buildDistractionCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: darkTeal,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'لا لازم نیست تمام توجهت روی درد باشد',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          Text(
-            'اگر درد اذیتت می‌کند، یک فعالیت آرام و لذت‌بخش هم می‌تواند کمک کند که ذهنت کمتر درگیر ناراحتی باشد.',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.78),
-              fontSize: 11,
-              height: 1.6,
-            ),
-          ),
-
-          const SizedBox(height: 15),
-
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildSuggestionChip(
-                Icons.phone_rounded,
-                'با یک دوست تماس بگیر',
-              ),
-              _buildSuggestionChip(
-                Icons.music_note_rounded,
-                'موسیقی گوش بده',
-              ),
-              _buildSuggestionChip(
-                Icons.movie_outlined,
-                'یک فیلم ببین',
-              ),
-              _buildSuggestionChip(
-                Icons.menu_book_rounded,
-                'کتاب بخوان',
-              ),
-              _buildSuggestionChip(
-                Icons.self_improvement_rounded,
-                'چند دقیقه آرام باش',
-              ),
-              _buildSuggestionChip(
-                Icons.brush_rounded,
-                'یک کار خلاقانه',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuggestionChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 9,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: primaryGreen,
-            size: 16,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // DAILY LOG
-  // ---------------------------------------------------------------------------
-
-  Widget _buildDailyLogCard() {
-    return _whiteCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'یادداشت امروز',
-            style: TextStyle(
-              color: darkTeal,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'چیزی هست که دوست داری درباره امروز ثبت کنی؟',
-            style: TextStyle(
-              color: mutedText,
-              fontSize: 11,
-            ),
-          ),
-          const SizedBox(height: 13),
-          TextField(
-            maxLines: 4,
-            textDirection: TextDirection.rtl,
-            decoration: InputDecoration(
-              hintText: 'مثلاً: امروز گرفتگی بیشتری داشتم...',
-              hintStyle: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 11,
-              ),
-              filled: true,
-              fillColor: bgColor,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(15),
-                borderSide: BorderSide(
-                  color: primaryGreen.withOpacity(0.5),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(
-                Icons.check_rounded,
-                size: 18,
-              ),
-              label: const Text(
-                'ثبت اطلاعات امروز',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryGreen,
-                foregroundColor: darkTeal,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 13,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // SAFETY
-  // ---------------------------------------------------------------------------
-
-  Widget _buildSafetyCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orangeAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(
-          color: Colors.orangeAccent.withOpacity(0.18),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.info_outline_rounded,
-            color: Colors.orangeAccent,
-            size: 22,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'اگر درد بسیار شدید یا غیرمعمول است، ناگهان بدتر شده، باعث اختلال جدی در فعالیت‌های روزانه می‌شود یا با علائم نگران‌کننده دیگری همراه است، بهتر است به جای تکیه بر این صفحه با پزشک یا متخصص سلامت مشورت شود.',
-              style: TextStyle(
-                color: mutedText,
-                fontSize: 10,
-                height: 1.6,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // COMMON UI
-  // ---------------------------------------------------------------------------
-
-  Widget _whiteCard({required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: padding,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(color: line),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 16, offset: Offset(0, 5))],
       ),
       child: child,
     );
   }
 
-  Widget _iconBox(
-      IconData icon,
-      Color color,
-      Color background,
-      ) {
-    return Container(
-      width: 43,
-      height: 43,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Icon(
-        icon,
-        color: color,
-        size: 22,
-      ),
+  Widget _cycleOverview() {
+    return _card(
+      padding: const EdgeInsets.all(18),
+      child: Column(children: [
+        Row(children: [
+          _iconBox(Icons.calendar_month_rounded, pink, lightPink),
+          const SizedBox(width: 11),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('چرخه فعلی', style: TextStyle(color: muted, fontSize: 12)),
+            SizedBox(height: 3),
+            Text('روز ۱۴ از حدود ۲۸ روز', style: TextStyle(color: darkTeal, fontSize: 15, fontWeight: FontWeight.w900)),
+          ])),
+          Flexible(child: Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6), decoration: BoxDecoration(color: lightPink, borderRadius: BorderRadius.circular(11)), child: const Text('فاز میانی', style: TextStyle(color: pink, fontSize: 10, fontWeight: FontWeight.w900)))),
+        ]),
+        const SizedBox(height: 18),
+        ClipRRect(borderRadius: BorderRadius.circular(20), child: const LinearProgressIndicator(value: .5, minHeight: 9, backgroundColor: bg, valueColor: AlwaysStoppedAnimation(pink))),
+        const SizedBox(height: 9),
+        const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('شروع چرخه', style: TextStyle(color: muted, fontSize: 10)),
+          Text('روز ۱۴', style: TextStyle(color: pink, fontSize: 10, fontWeight: FontWeight.w900)),
+          Text('چرخه بعدی', style: TextStyle(color: muted, fontSize: 10)),
+        ]),
+      ]),
     );
   }
+
+  Widget _statusCard() {
+    final significant = pain >= 7 || mood <= 2;
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [pink.withValues(alpha: .18), green.withValues(alpha: .08)], begin: Alignment.topRight, end: Alignment.bottomLeft),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: pink.withValues(alpha: .22)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(width: 46, height: 46, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .85), shape: BoxShape.circle), child: Icon(significant ? Icons.favorite_border_rounded : Icons.spa_rounded, color: pink, size: 25)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(significant ? 'امروز کمی بیشتر مراقب خودت باش' : 'وضعیت امروزت ثبت شد', style: const TextStyle(color: darkTeal, fontSize: 14, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 5),
+          Text(significant ? 'علائم ثبت‌شده نشان می‌دهند بهتر است امروز فشار کمتری به خودت وارد کنی.' : 'ثبت روزانه به سی کمک می‌کند الگوی علائم را در طول زمان بهتر نشان دهد.', style: const TextStyle(color: muted, fontSize: 11, height: 1.55)),
+        ])),
+      ]),
+    );
+  }
+
+  Widget _painCard() {
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _metricHeader(Icons.monitor_heart_outlined, pink, lightPink, 'میزان درد امروز', 'شدت درد را از ۰ تا ۱۰ مشخص کن', '$pain/10'),
+      const SizedBox(height: 13),
+      SliderTheme(data: SliderThemeData(activeTrackColor: _painColor(pain), inactiveTrackColor: bg, thumbColor: _painColor(pain), overlayColor: _painColor(pain).withValues(alpha: .12), trackHeight: 7), child: Slider(min: 0, max: 10, divisions: 10, value: pain.toDouble(), onChanged: (v) => setState(() => pain = v.round()))),
+      const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('بدون درد', style: TextStyle(color: muted, fontSize: 9)), Text('متوسط', style: TextStyle(color: muted, fontSize: 9)), Text('شدید', style: TextStyle(color: muted, fontSize: 9))]),
+      const SizedBox(height: 12),
+      Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: _painColor(pain).withValues(alpha: .08), borderRadius: BorderRadius.circular(13)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(pain >= 8 ? Icons.warning_amber_rounded : Icons.favorite_border_rounded, color: _painColor(pain), size: 21), const SizedBox(width: 8), Expanded(child: Text(_painMessage(), style: const TextStyle(color: muted, fontSize: 10, height: 1.5)))])),
+    ]));
+  }
+
+  String _painMessage() {
+    if (pain <= 2) return 'درد خفیف است؛ مراقبت معمول و استراحت کوتاه می‌تواند کافی باشد.';
+    if (pain <= 5) return 'اگر لازم است، شدت فعالیت را کمتر کن و از مراقبت‌های ساده استفاده کن.';
+    if (pain <= 7) return 'اگر درد فعالیت روزانه را مختل می‌کند، امروز فشار کمتری به خودت وارد کن.';
+    return 'اگر این درد غیرمعمول، ادامه‌دار یا مختل‌کننده فعالیت روزانه است، با متخصص سلامت مشورت کن.';
+  }
+
+  Color _painColor(int value) {
+    if (value <= 2) return green;
+    if (value <= 5) return Colors.orangeAccent;
+    if (value <= 7) return Colors.deepOrangeAccent;
+    return Colors.redAccent;
+  }
+
+  Widget _moodEnergyCard() {
+    return _card(child: Column(children: [
+      _slider('خلق‌وخو', 'امروز از نظر روحی چطوری؟', Icons.mood_rounded, Colors.orangeAccent, mood, (v) => mood = v),
+      const SizedBox(height: 14),
+      _slider('انرژی', 'چقدر انرژی برای فعالیت داری؟', Icons.bolt_rounded, green, energy, (v) => energy = v),
+    ]));
+  }
+
+  Widget _slider(String title, String subtitle, IconData icon, Color color, int value, ValueChanged<int> change) {
+    return Column(children: [
+      _metricHeader(icon, color, color.withValues(alpha: .10), title, subtitle, '$value/5'),
+      SliderTheme(data: SliderThemeData(activeTrackColor: color, inactiveTrackColor: bg, thumbColor: color, trackHeight: 6), child: Slider(min: 1, max: 5, divisions: 4, value: value.toDouble(), onChanged: (v) => setState(() => change(v.round())))),
+    ]);
+  }
+
+  Widget _metricHeader(IconData icon, Color color, Color iconBg, String title, String subtitle, String value) {
+    return Row(children: [
+      _iconBox(icon, color, iconBg),
+      const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: darkTeal, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(color: muted, fontSize: 10))])),
+      Text(value, style: TextStyle(color: color, fontSize: 17, fontWeight: FontWeight.w900)),
+    ]);
+  }
+
+  Widget _chartCard(String title, String subtitle, List<double> data, double max, Color color, {List<double>? secondary}) {
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [_iconBox(Icons.insights_rounded, color, color.withValues(alpha: .10)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: darkTeal, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(color: muted, fontSize: 10))]))]),
+      const SizedBox(height: 12),
+      SizedBox(height: 130, width: double.infinity, child: CustomPaint(painter: _LineChartPainter(data, secondary, max, color, secondary == null ? null : pink, bg))),
+      const SizedBox(height: 5),
+      const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('۷ روز پیش', style: TextStyle(color: muted, fontSize: 9)), Text('امروز', style: TextStyle(color: muted, fontSize: 9))]),
+      if (secondary != null) ...[const SizedBox(height: 8), Row(children: [_legend(green, 'خلق‌وخو'), const SizedBox(width: 14), _legend(pink, 'انرژی')])],
+    ]));
+  }
+
+  Widget _legend(Color color, String label) => Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)), const SizedBox(width: 5), Text(label, style: const TextStyle(color: muted, fontSize: 9))]);
+
+  Widget _careCard() {
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('چند گزینه ساده برای امتحان کردن', style: TextStyle(color: darkTeal, fontSize: 13, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 4),
+      const Text('مواردی را که امتحان کرده‌ای علامت بزن تا ثبت روزانه‌ات معنادارتر شود.', style: TextStyle(color: muted, fontSize: 10, height: 1.5)),
+      const SizedBox(height: 11),
+      _careTile(Icons.local_fire_department_outlined, 'گرمای ملایم', 'برای گرفتگی‌ها می‌تواند آرام‌کننده باشد.', pink, heat, () => setState(() => heat = !heat)),
+      _careTile(Icons.water_drop_outlined, 'آب کافی', 'مایعات کافی و وعده‌های منظم را فراموش نکن.', teal, hydration, () => setState(() => hydration = !hydration)),
+      _careTile(Icons.directions_walk_rounded, 'حرکت سبک', 'اگر بدنت اجازه می‌دهد، پیاده‌روی یا کشش سبک.', Colors.orangeAccent, movement, () => setState(() => movement = !movement)),
+    ]));
+  }
+
+  Widget _careTile(IconData icon, String title, String description, Color color, bool selected, VoidCallback onTap) {
+    return Padding(padding: const EdgeInsets.only(bottom: 7), child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(13), child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: selected ? color.withValues(alpha: .08) : bg, borderRadius: BorderRadius.circular(13), border: Border.all(color: selected ? color.withValues(alpha: .28) : Colors.transparent)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [_iconBox(icon, color, color.withValues(alpha: .10), size: 38, iconSize: 19), const SizedBox(width: 9), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: darkTeal, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(description, style: const TextStyle(color: muted, fontSize: 9, height: 1.4))])), Icon(selected ? Icons.check_circle_rounded : Icons.circle_outlined, color: selected ? color : Colors.grey, size: 20)]))));
+  }
+
+  Widget _socialCard() {
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(color: darkTeal, borderRadius: BorderRadius.circular(20)),
+      child: LayoutBuilder(builder: (context, constraints) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), shape: BoxShape.circle), child: const Icon(Icons.groups_rounded, color: Colors.white, size: 22)), const SizedBox(width: 10), const Expanded(child: Text('یک ارتباط کوچک هم مراقبت از خود است', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900)))]),
+          const SizedBox(height: 8),
+          Text('اگر چند روز است بیشتر تنها مانده‌ای، امروز می‌تواند فرصت خوبی برای یک تماس، دیدن یک دوست یا چند دقیقه بیرون رفتن باشد.', style: TextStyle(color: Colors.white.withValues(alpha: .78), fontSize: 10, height: 1.55)),
+          const SizedBox(height: 10),
+          Wrap(spacing: 7, runSpacing: 7, children: [
+            _socialChip('با یک دوست تماس بگیر', Icons.phone_rounded),
+            _socialChip('یک نفر را ببین', Icons.person_add_alt_rounded),
+            _socialChip(socialReminder ? 'یادآوری روشن است' : 'برای امروز یادم بنداز', Icons.notifications_active_outlined),
+          ]),
+        ]);
+      }),
+    );
+  }
+
+  Widget _socialChip(String text, IconData icon) {
+    return InkWell(onTap: text.contains('یادم') ? () => setState(() => socialReminder = !socialReminder) : null, borderRadius: BorderRadius.circular(11), child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(11)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: green, size: 15), const SizedBox(width: 5), Text(text, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700))])));
+  }
+
+  Widget _dailyLog() {
+    return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('یادداشت امروز', style: TextStyle(color: darkTeal, fontSize: 13, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 4),
+      const Text('هر چیزی که در علائم امروز مهم بوده ثبت کن.', style: TextStyle(color: muted, fontSize: 10)),
+      const SizedBox(height: 10),
+      TextField(controller: noteController, maxLines: 3, textDirection: TextDirection.rtl, decoration: InputDecoration(hintText: 'مثلاً امروز گرفتگی بیشتری داشتم...', hintStyle: const TextStyle(color: Colors.grey, fontSize: 10), filled: true, fillColor: bg, border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide.none))),
+      const SizedBox(height: 9),
+      SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => FocusScope.of(context).unfocus(), icon: const Icon(Icons.check_rounded, size: 17), label: const Text('ثبت اطلاعات امروز', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: darkTeal, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)))))
+    ]));
+  }
+
+  Widget _safetyCard() => Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.orangeAccent.withValues(alpha: .08), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.orangeAccent.withValues(alpha: .18))), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.info_outline_rounded, color: Colors.orangeAccent, size: 20), const SizedBox(width: 8), const Expanded(child: Text('اگر درد بسیار شدید یا غیرمعمول است، ناگهان بدتر شده یا فعالیت‌های روزانه را مختل می‌کند، بهتر است با پزشک یا متخصص سلامت مشورت شود.', style: TextStyle(color: muted, fontSize: 9, height: 1.6)))]));
+
+  Widget _iconBox(IconData icon, Color color, Color background, {double size = 42, double iconSize = 21}) => Container(width: size, height: size, decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: iconSize));
 }
 
-// ============================================================================
-// SIMPLE LINE CHART
-// ============================================================================
-
 class _LineChartPainter extends CustomPainter {
-  final List<double> primaryData;
-  final List<double>? secondaryData;
+  final List<double> primary;
+  final List<double>? secondary;
   final double maxValue;
   final Color primaryColor;
   final Color? secondaryColor;
   final Color gridColor;
 
-  _LineChartPainter({
-    required this.primaryData,
-    required this.secondaryData,
-    required this.maxValue,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.gridColor,
-  });
+  const _LineChartPainter(this.primary, this.secondary, this.maxValue, this.primaryColor, this.secondaryColor, this.gridColor);
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (primaryData.isEmpty) return;
-
-    final double left = 10;
-    final double right = size.width - 10;
-    final double top = 8;
-    final double bottom = size.height - 12;
-
-    final Paint gridPaint = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1;
-
-    for (int i = 0; i <= 4; i++) {
-      final double y =
-          top + ((bottom - top) / 4) * i;
-
-      canvas.drawLine(
-        Offset(left, y),
-        Offset(right, y),
-        gridPaint,
-      );
+    if (primary.length < 2) return;
+    final left = 8.0;
+    final right = size.width - 8;
+    final top = 8.0;
+    final bottom = size.height - 8;
+    final grid = Paint()..color = gridColor..strokeWidth = 1;
+    for (var i = 0; i <= 4; i++) {
+      final y = top + (bottom - top) * i / 4;
+      canvas.drawLine(Offset(left, y), Offset(right, y), grid);
     }
-
-    _drawLine(
-      canvas,
-      size,
-      primaryData,
-      primaryColor,
-      left,
-      right,
-      top,
-      bottom,
-    );
-
-    if (secondaryData != null &&
-        secondaryData!.isNotEmpty &&
-        secondaryColor != null) {
-      _drawLine(
-        canvas,
-        size,
-        secondaryData!,
-        secondaryColor!,
-        left,
-        right,
-        top,
-        bottom,
-      );
-    }
+    _draw(canvas, primary, primaryColor, left, right, top, bottom);
+    if (secondary != null && secondaryColor != null && secondary!.length > 1) _draw(canvas, secondary!, secondaryColor!, left, right, top, bottom);
   }
 
-  void _drawLine(
-      Canvas canvas,
-      Size size,
-      List<double> data,
-      Color color,
-      double left,
-      double right,
-      double top,
-      double bottom,
-      ) {
-    if (data.length < 2) return;
-
-    final Paint linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final Paint pointPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final Path path = Path();
-
-    for (int i = 0; i < data.length; i++) {
-      final double x = left +
-          (right - left) *
-              (i / (data.length - 1));
-
-      final double normalized =
-      (data[i] / maxValue).clamp(0.0, 1.0);
-
-      final double y =
-          bottom - (bottom - top) * normalized;
-
+  void _draw(Canvas canvas, List<double> data, Color color, double left, double right, double top, double bottom) {
+    final line = Paint()..color = color..strokeWidth = 2.6..style = PaintingStyle.stroke..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
+    final point = Paint()..color = color;
+    final path = Path();
+    for (var i = 0; i < data.length; i++) {
+      final x = left + (right - left) * i / (data.length - 1);
+      final normalized = (data[i] / maxValue).clamp(0.0, 1.0);
+      final y = bottom - (bottom - top) * normalized;
       if (i == 0) {
         path.moveTo(x, y);
       } else {
         path.lineTo(x, y);
       }
+      canvas.drawCircle(Offset(x, y), 3.3, point);
     }
-
-    canvas.drawPath(path, linePaint);
-
-    for (int i = 0; i < data.length; i++) {
-      final double x = left +
-          (right - left) *
-              (i / (data.length - 1));
-
-      final double normalized =
-      (data[i] / maxValue).clamp(0.0, 1.0);
-
-      final double y =
-          bottom - (bottom - top) * normalized;
-
-      canvas.drawCircle(
-        Offset(x, y),
-        4,
-        pointPaint,
-      );
-
-      canvas.drawCircle(
-        Offset(x, y),
-        6,
-        Paint()
-          ..color = color.withOpacity(0.12)
-          ..style = PaintingStyle.fill,
-      );
-    }
+    canvas.drawPath(path, line);
   }
 
   @override
-  bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
-    return oldDelegate.primaryData != primaryData ||
-        oldDelegate.secondaryData != secondaryData ||
-        oldDelegate.maxValue != maxValue ||
-        oldDelegate.primaryColor != primaryColor;
-  }
+  bool shouldRepaint(covariant _LineChartPainter oldDelegate) => oldDelegate.primary != primary || oldDelegate.secondary != secondary || oldDelegate.maxValue != maxValue || oldDelegate.primaryColor != primaryColor || oldDelegate.secondaryColor != secondaryColor;
 }
