@@ -102,8 +102,46 @@ class _SignupPageState extends State<SignupPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 360;
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _birthDropdown(
+                hint: 'روز',
+                value: _day,
+                items: List.generate(31, (i) => '${i + 1}'),
+                onChanged: (v) => setState(() => _day = v),
+              ),
+              const SizedBox(height: 8),
+              _birthDropdown(
+                hint: 'ماه',
+                value: _month,
+                items: const ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'],
+                onChanged: (v) => setState(() => _month = v),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _year,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  hintText: 'سال تولد',
+                  hintStyle: TextStyle(color: Colors.grey.shade400),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
         return Container(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 12, vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           decoration: BoxDecoration(
             color: Colors.grey.shade50,
             borderRadius: BorderRadius.circular(16),
@@ -112,31 +150,25 @@ class _SignupPageState extends State<SignupPage> {
             children: [
               Expanded(
                 flex: 2,
-                child: DropdownButtonFormField<String>(
-                  initialValue: _day,
-                  hint: Text('روز', style: TextStyle(color: Colors.grey.shade400)),
+                child: _birthDropdown(
+                  hint: 'روز',
+                  value: _day,
+                  items: List.generate(31, (i) => '${i + 1}'),
                   onChanged: (v) => setState(() => _day = v),
-                  decoration: const InputDecoration(border: InputBorder.none),
-                  isExpanded: true,
-                  items: List.generate(31, (i) => '${i + 1}')
-                      .map((d) => DropdownMenuItem(value: d, child: Text(d, overflow: TextOverflow.ellipsis)))
-                      .toList(),
+                  compact: true,
                 ),
               ),
               Container(width: 1, height: 28, color: Colors.grey.shade300),
               Expanded(
                 flex: 4,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 8),
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _month,
-                    hint: Text('ماه', style: TextStyle(color: Colors.grey.shade400)),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: _birthDropdown(
+                    hint: 'ماه',
+                    value: _month,
+                    items: const ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'],
                     onChanged: (v) => setState(() => _month = v),
-                    decoration: const InputDecoration(border: InputBorder.none),
-                    isExpanded: true,
-                    items: const ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند']
-                        .map((m) => DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis)))
-                        .toList(),
+                    compact: true,
                   ),
                 ),
               ),
@@ -144,7 +176,7 @@ class _SignupPageState extends State<SignupPage> {
               Expanded(
                 flex: 2,
                 child: Padding(
-                  padding: EdgeInsets.only(right: compact ? 4 : 8),
+                  padding: const EdgeInsets.only(right: 8),
                   child: TextField(
                     controller: _year,
                     keyboardType: TextInputType.number,
@@ -153,6 +185,7 @@ class _SignupPageState extends State<SignupPage> {
                       hintText: 'سال',
                       hintStyle: TextStyle(color: Colors.grey.shade400),
                       border: InputBorder.none,
+                      isDense: true,
                     ),
                   ),
                 ),
@@ -161,6 +194,37 @@ class _SignupPageState extends State<SignupPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _birthDropdown({
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    bool compact = false,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      hint: Text(hint, style: TextStyle(color: Colors.grey.shade400)),
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        isDense: compact,
+        contentPadding: compact ? EdgeInsets.zero : null,
+      ),
+      isExpanded: true,
+      items: items
+          .map((item) => DropdownMenuItem(
+                value: item,
+                child: Text(
+                  item,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ))
+          .toList(),
     );
   }
 
@@ -199,9 +263,9 @@ class _SignupPageState extends State<SignupPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Center(child: Icon(Icons.person_add_rounded, size: 56, color: primaryGreen.withValues(alpha: .8))),
+                            Center(child: Icon(Icons.person_add_rounded, size: constraints.maxWidth < 360 ? 46 : 56, color: primaryGreen.withValues(alpha: .8))),
                             const SizedBox(height: 14),
-                            const Text('ساخت حساب جدید', textAlign: TextAlign.center, style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: Color(0xFF30343B))),
+                            const Text('ساخت حساب جدید', textAlign: TextAlign.center, style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, color: Color(0xFF30343B)), overflow: TextOverflow.ellipsis),
                             const SizedBox(height: 6),
                             Text('اطلاعات خود را وارد کنید', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
                             const SizedBox(height: 26),
