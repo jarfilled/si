@@ -35,7 +35,7 @@ dependencies:
   shamsi_date: ^1.1.1
   audioplayers: ^6.8.1
   record: ^7.1.1
-  file_picker: ^12.0.0
+  file_picker: ^11.0.3
   just_audio: 0.10.6
 
   flutter:
@@ -98,8 +98,3 @@ flutter:
     - assets/sounds/too_close.wav
     - assets/sounds/neck.wav
     - assets/sounds/hunch.wav
-    - assets/sounds/wrist.wav
-    - assets/sounds/low_light.wav
-
-  uses-material-design: true
-
