@@ -30,13 +30,7 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
   String? error;
   List<Map<String, dynamic>> daily = [];
 
-  final live = <String, int>{
-    'hunch': 0,
-    'neck': 0,
-    'wrist': 0,
-    'tooClose': 0,
-    'lowLight': 0,
-  };
+  final live = <String, int>{'hunch': 0, 'neck': 0, 'wrist': 0, 'tooClose': 0, 'lowLight': 0};
 
   @override
   void initState() {
@@ -71,16 +65,10 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
       final rows = await HealthDataRepository.instance.getDailyMetrics(days: 7);
       rows.sort((a, b) => DateTime.parse(a['date'].toString()).compareTo(DateTime.parse(b['date'].toString())));
       if (!mounted) return;
-      setState(() {
-        daily = rows;
-        loading = false;
-      });
+      setState(() { daily = rows; loading = false; });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        loading = false;
-        error = 'بارگذاری تاریخچه سلامت با مشکل مواجه شد.';
-      });
+      setState(() { loading = false; error = 'بارگذاری تاریخچه سلامت با مشکل مواجه شد.'; });
       debugPrint('[PostureAnalysisPage] $e');
     }
   }
@@ -128,15 +116,6 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
     child: child,
   );
 
-  Widget _metricCard(String title, String value, String detail, IconData icon, Color color) => _card(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 14),
-    child: Row(children: [
-      Container(width: 38, height: 38, decoration: BoxDecoration(color: color.withValues(alpha: .11), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)),
-      const SizedBox(width: 9),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted, fontSize: 9)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.w700))])),
-    ]),
-  );
-
   Widget _header() => Row(children: [
     const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('وضعیت بدن', style: TextStyle(color: text, fontSize: 24, fontWeight: FontWeight.w900)), SizedBox(height: 4), Text('داده‌های پایش را به زبان ساده دنبال کن.', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 11))])),
     const SizedBox(width: 12),
@@ -155,15 +134,8 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
         const SizedBox(height: 14),
         LayoutBuilder(builder: (_, constraints) {
           final compact = constraints.maxWidth < 390;
-          final values = [
-            ('قوز', live['hunch']!, Icons.airline_seat_recline_normal_rounded),
-            ('گردن', live['neck']!, Icons.accessibility_new_rounded),
-            ('مچ', live['wrist']!, Icons.back_hand_rounded),
-            ('فاصله', live['tooClose']!, Icons.phone_android_rounded),
-          ];
-          if (compact) {
-            return Wrap(spacing: 7, runSpacing: 7, children: values.map((item) => _livePill(item.$1, item.$2, item.$3)).toList());
-          }
+          final values = [('قوز', live['hunch']!, Icons.airline_seat_recline_normal_rounded), ('گردن', live['neck']!, Icons.accessibility_new_rounded), ('مچ', live['wrist']!, Icons.back_hand_rounded), ('فاصله', live['tooClose']!, Icons.phone_android_rounded)];
+          if (compact) return Wrap(spacing: 7, runSpacing: 7, children: values.map((item) => _livePill(item.$1, item.$2, item.$3)).toList());
           return Row(children: values.map((item) => Expanded(child: _livePill(item.$1, item.$2, item.$3))).toList(growable: false));
         }),
       ]),
@@ -179,20 +151,12 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
   Widget _todayCard() {
     final row = today;
     final score = _score();
-    if (row == null) {
-      return _card(child: const Row(children: [Icon(Icons.insights_rounded, color: green), SizedBox(width: 10), Expanded(child: Text('هنوز داده روزانه‌ای برای نمایش وجود ندارد.', style: TextStyle(color: muted, fontSize: 11)))]));
-    }
+    if (row == null) return _card(child: const Row(children: [Icon(Icons.insights_rounded, color: green), SizedBox(width: 10), Expanded(child: Text('هنوز داده روزانه‌ای برای نمایش وجود ندارد.', style: TextStyle(color: muted, fontSize: 11)))]));
     return _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [const Expanded(child: Text('خلاصه امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900))), Container(width: 52, height: 52, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 6, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Text('$score', style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900))]))]),
+      Row(children: [const Expanded(child: Text('خلاصه امروز', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900))), SizedBox(width: 52, height: 52, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: score / 100, strokeWidth: 6, backgroundColor: mint, valueColor: const AlwaysStoppedAnimation(green)), Text('$score', style: const TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900))]))]),
       const SizedBox(height: 12),
       LayoutBuilder(builder: (_, constraints) {
-        final items = [
-          ('گردن', _duration(_number(row, 'neck')), Icons.accessibility_new_rounded, teal),
-          ('قوز', _duration(_number(row, 'hunch')), Icons.airline_seat_recline_normal_rounded, green),
-          ('مچ', _duration(_number(row, 'wrist')), Icons.back_hand_rounded, orange),
-          ('فاصله کم', _duration(_number(row, 'tooClose')), Icons.phone_android_rounded, red),
-          ('نور کم', _duration(_number(row, 'badLight')), Icons.wb_sunny_outlined, purple),
-        ];
+        final items = [('گردن', _duration(_number(row, 'neck')), Icons.accessibility_new_rounded, teal), ('قوز', _duration(_number(row, 'hunch')), Icons.airline_seat_recline_normal_rounded, green), ('مچ', _duration(_number(row, 'wrist')), Icons.back_hand_rounded, orange), ('فاصله کم', _duration(_number(row, 'tooClose')), Icons.phone_android_rounded, red), ('نور کم', _duration(_number(row, 'badLight')), Icons.wb_sunny_outlined, purple)];
         final width = constraints.maxWidth < 390 ? (constraints.maxWidth - 8) / 2 : (constraints.maxWidth - 16) / 3;
         return Wrap(spacing: 8, runSpacing: 8, children: items.map((item) => SizedBox(width: width, child: _smallMetric(item.$1, item.$2, item.$3, item.$4))).toList());
       }),
@@ -223,13 +187,13 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
         minX: 0,
         maxX: (spots.length - 1).toDouble(),
         minY: 0,
-        maxY: maxY == 0 ? 1 : maxY * 1.15,
+        maxY: maxY * 1.15,
         gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (_) => const FlLine(color: line, strokeWidth: 1)),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32, showTitles: true)),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32)),
           bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 26, interval: 1, getTitlesWidget: (value, meta) {
             final i = value.round();
             if (i < 0 || i >= daily.length) return const SizedBox.shrink();
@@ -249,7 +213,7 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
       const SizedBox(height: 10),
       ...daily.reversed.map((row) {
         final date = DateTime.parse(row['date'].toString());
-        final label = date.day == DateTime.now().day && date.month == DateTime.now().month ? 'امروز' : '${date.month}/${date.day}';
+        final label = date.year == DateTime.now().year && date.month == DateTime.now().month && date.day == DateTime.now().day ? 'امروز' : '${date.month}/${date.day}';
         final score = _number(row, 'health_score').round();
         final total = _number(row, 'neck') + _number(row, 'hunch') + _number(row, 'wrist');
         return Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [Container(width: 34, height: 34, decoration: const BoxDecoration(color: mint, shape: BoxShape.circle), child: const Icon(Icons.calendar_today_rounded, color: green, size: 16)), const SizedBox(width: 9), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('فشار بدنی: ${_duration(total)}', style: const TextStyle(color: muted, fontSize: 9))])), Text(score > 0 ? '$score' : '—', style: const TextStyle(color: green, fontSize: 13, fontWeight: FontWeight.w900))]));
@@ -276,13 +240,7 @@ class _PostureAnalysisPageState extends State<PostureAnalysisPage> {
               const SizedBox(height: 14),
               if (loading) const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: green))),
               if (error != null) _card(child: Row(children: [const Icon(Icons.error_outline_rounded, color: red), const SizedBox(width: 8), Expanded(child: Text(error!, style: const TextStyle(color: muted, fontSize: 10)))])),
-              if (!loading) ...[
-                _todayCard(),
-                const SizedBox(height: 14),
-                _chart(),
-                const SizedBox(height: 14),
-                _breakdown(),
-              ],
+              if (!loading) ...[_todayCard(), const SizedBox(height: 14), _chart(), const SizedBox(height: 14), _breakdown()],
             ],
           ),
         ),
