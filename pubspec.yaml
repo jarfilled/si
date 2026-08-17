@@ -32,6 +32,11 @@ dependencies:
   hive_flutter: ^1.1.0
   chewie: ^1.15.0
   video_player: ^2.14.0
+  shamsi_date: ^1.1.1
+  audioplayers: ^6.8.1
+  record: ^7.1.1
+  file_picker: ^12.0.0
+  just_audio: 0.10.6
 
   flutter:
     sdk: flutter
@@ -90,7 +95,11 @@ flutter:
     - assets/icons/hunch.png
     - assets/icons/neck_tilt.png
     - assets/icons/too_close.png
-    - assets/icons/default.png
+    - assets/sounds/too_close.wav
+    - assets/sounds/neck.wav
+    - assets/sounds/hunch.wav
+    - assets/sounds/wrist.wav
+    - assets/sounds/low_light.wav
 
   uses-material-design: true
 

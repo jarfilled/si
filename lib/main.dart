@@ -103,7 +103,6 @@ class _OverlayHudState extends State<OverlayHud> {
   @override
   void initState() {
     super.initState();
-
     _listenForOverlayData();
   }
 
@@ -114,9 +113,7 @@ class _OverlayHudState extends State<OverlayHud> {
   void _listenForOverlayData() {
     FlutterOverlayWindow.overlayListener.listen(
           (dynamic data) {
-        debugPrint(
-          '[OverlayHud] RECEIVED: $data',
-        );
+        debugPrint('[OverlayHud] RECEIVED: $data');
 
         if (!mounted) {
           return;
@@ -131,9 +128,7 @@ class _OverlayHudState extends State<OverlayHud> {
 
           final type = map['type']?.toString();
 
-          debugPrint(
-            '[OverlayHud] type = $type',
-          );
+          debugPrint('[OverlayHud] type = $type');
 
           bool readBool(String key) {
             final value = map[key];
@@ -146,15 +141,12 @@ class _OverlayHudState extends State<OverlayHud> {
               return value != 0;
             }
 
-            return value
-                ?.toString()
-                .toLowerCase() ==
-                'true';
+            return value?.toString().toLowerCase() == 'true';
           }
 
           setState(() {
             // ---------------------------------------------------------------
-            // Existing posture HUD logic
+            // POSTURE HUD
             // ---------------------------------------------------------------
 
             _showTooClose = readBool('tooClose');
@@ -174,7 +166,7 @@ class _OverlayHudState extends State<OverlayHud> {
                     readBool('lowLightPoor');
 
             // ---------------------------------------------------------------
-            // NSFW state
+            // NSFW STATE
             // ---------------------------------------------------------------
 
             if (type == 'nsfw') {
@@ -244,18 +236,18 @@ class _OverlayHudState extends State<OverlayHud> {
       body: Stack(
         children: [
           // ==================================================================
-          // EXISTING POSTURE HUD
+          // SMALL POSTURE HUD
           //
-          // This remains the same basic HUD that was already working.
+          // Positioned in the TOP-RIGHT corner so it is less distracting.
           // ==================================================================
 
-          Align(
-            alignment: Alignment.topCenter,
-
-            child: SafeArea(
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
               child: Padding(
                 padding: const EdgeInsets.only(
-                  top: 8.0,
+                  top: 6,
+                  right: 6,
                 ),
 
                 child: Row(
@@ -300,12 +292,7 @@ class _OverlayHudState extends State<OverlayHud> {
           // ==================================================================
           // NSFW WARNING
           //
-          // IMPORTANT:
-          //
-          // This is NOT another overlay.
-          //
-          // It is simply another widget rendered by the SAME existing
-          // OverlayHud that already displays the posture indicators.
+          // This remains centered and uses the SAME overlay.
           // ==================================================================
 
           if (_showNsfw)
@@ -316,7 +303,7 @@ class _OverlayHudState extends State<OverlayHud> {
   }
 
   // ==========================================================================
-  // NORMAL HUD INDICATOR
+  // SMALL NORMAL HUD INDICATOR
   // ==========================================================================
 
   Widget _indicatorCircle(
@@ -325,21 +312,21 @@ class _OverlayHudState extends State<OverlayHud> {
       ) {
     return Container(
       margin: const EdgeInsets.symmetric(
-        horizontal: 4,
+        horizontal: 2,
       ),
 
-      width: 32,
-      height: 32,
+      width: 24,
+      height: 24,
 
       decoration: BoxDecoration(
-        color: color.withOpacity(0.90),
+        color: color.withValues(alpha: 0.90),
         shape: BoxShape.circle,
       ),
 
       child: Icon(
         icon,
         color: Colors.white,
-        size: 18,
+        size: 14,
       ),
     );
   }
@@ -368,24 +355,20 @@ class _OverlayHudState extends State<OverlayHud> {
         ),
 
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.94),
+          color: Colors.black.withValues(alpha: 0.94),
 
           borderRadius: BorderRadius.circular(
             18,
           ),
 
           border: Border.all(
-            color: Colors.redAccent.withOpacity(
-              0.85,
-            ),
+            color: Colors.redAccent.withValues(alpha: 0.85),
             width: 2,
           ),
 
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(
-                0.45,
-              ),
+              color: Colors.black.withValues(alpha: 0.45),
               blurRadius: 16,
               spreadRadius: 2,
             ),
