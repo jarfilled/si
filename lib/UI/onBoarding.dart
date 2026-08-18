@@ -21,7 +21,7 @@ class _OnBoardingPageState extends State<OnBoardingPage> {
   final List<Map<String, String>> _pages = [
     {'title': 'چشمانت را از صفحه محافظت کن', 'description': 'با یادآوری فاصله مناسب و استراحت چشم، خستگی دیجیتال را کمتر کن.', 'image': 'assets/eyeComfort.png', 'badge': 'قانون ۲۰-۲۰-۲۰'},
     {'title': 'وضعیت بدنت را بهتر نگه دار', 'description': 'گردن، کمر، مچ دست و فاصله از گوشی در طول روز پایش می‌شوند.', 'image': 'assets/backPosture.png', 'badge': 'پایش زنده'},
-    {'title': 'از داده‌هایت بینش بگیر', 'description': 'سی فعالیت‌های روزانه را به گزارش‌های ساده تبدیل می‌کند تا بدانید چه چیزی را باید اصلاح کنید.', 'image': 'assets/history.gif', 'badge': 'گزارش روزانه'},
+    {'title': 'از داده‌هایت بینش بگیر', 'description': 'سی فعالیت‌های روزانه را به گزارش‌های ساده تبدیل می‌کند تا بدانید چه چیزی را باید اصلاح کنید.', 'image': 'assets/history.png', 'badge': 'گزارش روزانه'},
     {'title': 'سلامت فقط وضعیت بدن نیست', 'description': 'در کنار پایش بدن، آب، حال روحی و عادت‌های روزانه‌ات را هم در یک تجربه یکپارچه دنبال کن.', 'image': 'assets/meditate.png', 'badge': 'سلامت کامل‌تر'},
   ];
 

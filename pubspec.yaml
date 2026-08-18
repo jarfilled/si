@@ -49,6 +49,14 @@ dependencies:
     path: ./monitor_channels
 
 dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo.png"
+
+
   flutter_test:
     sdk: flutter
 
@@ -70,27 +78,10 @@ flutter:
 
   assets:
     - assets/wrist_neck.png
-    - assets/posture.gif
-    - assets/sunny.gif
-    - assets/cloudy.gif
-    - assets/rain.gif
-    - assets/stretch.gif
-    - assets/history.gif
-    - assets/settings.gif
-    - assets/logo_gif.gif
     - assets/logo.png
-    - assets/pattern_header.png
-    - assets/terme.png
-    - assets/undraw_confirmed_c5lo.png
-    - assets/undraw_personal-information_h7kf.svg
-    - assets/undraw_terms_sx63.svg
-    - assets/undraw_text-messages_978a.svg
-    - assets/undraw_morning-workout_73u9.svg
     - assets/slouched.png
     - assets/straight.png
-    - assets/botte.png
-    - assets/botte2.png
-    - assets/botte3.png
+    - assets/history.png
     - assets/eyeComfort.png
     - assets/meditate.png
     - assets/backPosture.png
