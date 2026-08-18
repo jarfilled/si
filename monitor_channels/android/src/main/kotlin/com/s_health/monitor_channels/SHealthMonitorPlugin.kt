@@ -15,35 +15,42 @@ class SHealthMonitorPlugin : FlutterPlugin {
     companion object {
         private const val TAG = "SHealthPlugin"
 
-        // Must match CameraService.kt
-        const val ACTION_START_CAMERA = "com.s_health.action.START_CAMERA"
-        const val ACTION_STOP_CAMERA = "com.s_health.action.STOP_CAMERA"
+        const val ACTION_START_CAMERA =
+            "com.s_health.action.START_CAMERA"
+        const val ACTION_STOP_CAMERA =
+            "com.s_health.action.STOP_CAMERA"
 
-        const val DISTANCE_BROADCAST_ACTION = "com.s_health.broadcast.DISTANCE"
+        const val DISTANCE_BROADCAST_ACTION =
+            "com.s_health.broadcast.DISTANCE"
         const val EXTRA_DISTANCE = "distance"
 
-        const val POSTURE_BROADCAST_ACTION = "com.s_health.broadcast.POSTURE"
+        const val POSTURE_BROADCAST_ACTION =
+            "com.s_health.broadcast.POSTURE"
         const val EXTRA_POSTURE_STATUS = "posture_status"
         const val EXTRA_PITCH = "pitch"
         const val EXTRA_ROLL = "roll"
 
-        const val HUNCH_BROADCAST_ACTION = "com.s_health.broadcast.HUNCH"
+        const val HUNCH_BROADCAST_ACTION =
+            "com.s_health.broadcast.HUNCH"
         const val EXTRA_HUNCH_STATUS = "is_hunching"
         const val EXTRA_HUNCH_RATIO = "hunch_ratio"
 
-        const val LIGHT_BROADCAST_ACTION = "com.s_health.broadcast.LIGHT"
+        const val LIGHT_BROADCAST_ACTION =
+            "com.s_health.broadcast.LIGHT"
         const val EXTRA_LIGHT_LUX = "light_lux"
 
-        const val ACTION_START_LIGHT = "com.s_health.action.START_LIGHT"
-        const val ACTION_STOP_LIGHT = "com.s_health.action.STOP_LIGHT"
+        const val ACTION_START_LIGHT =
+            "com.s_health.action.START_LIGHT"
+        const val ACTION_STOP_LIGHT =
+            "com.s_health.action.STOP_LIGHT"
 
-        // Calibration value passed from Flutter to CameraService.
-        // This exact key must also be used in CameraService.kt.
-        const val EXTRA_HUNCH_DIVISOR = "hunch_divisor"
+        const val EXTRA_HUNCH_DIVISOR =
+            "hunch_divisor"
 
-        // Local fallback cache in case CameraService restarts later.
-        private const val PREFS_NAME = "s_health_monitor_preferences"
-        private const val PREF_HUNCH_DIVISOR = "hunch_divisor"
+        private const val PREFS_NAME =
+            "s_health_monitor_preferences"
+        private const val PREF_HUNCH_DIVISOR =
+            "hunch_divisor"
     }
 
     private var applicationContext: Context? = null
@@ -65,7 +72,9 @@ class SHealthMonitorPlugin : FlutterPlugin {
     private var postureReceiver: BroadcastReceiver? = null
     private var hunchReceiver: BroadcastReceiver? = null
 
-    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onAttachedToEngine(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         applicationContext = binding.applicationContext
 
         setupDistanceChannel(binding)
@@ -75,154 +84,234 @@ class SHealthMonitorPlugin : FlutterPlugin {
         setupMethodChannel(binding)
     }
 
-    private fun setupDistanceChannel(binding: FlutterPlugin.FlutterPluginBinding) {
+    private fun setupDistanceChannel(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         distanceEventChannel = EventChannel(
             binding.binaryMessenger,
-            "com.s_health/distance_stream"
+            "com.s_health/distance_stream",
         )
 
-        distanceEventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(
-                arguments: Any?,
-                events: EventChannel.EventSink?
-            ) {
-                distanceEventSink = events
-                registerDistanceReceiver()
-            }
+        distanceEventChannel?.setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink?,
+                ) {
+                    distanceEventSink = events
+                    registerDistanceReceiver()
+                }
 
-            override fun onCancel(arguments: Any?) {
-                unregisterDistanceReceiver()
-                distanceEventSink = null
-            }
-        })
+                override fun onCancel(arguments: Any?) {
+                    unregisterDistanceReceiver()
+                    distanceEventSink = null
+                }
+            },
+        )
     }
 
-    private fun setupPostureChannel(binding: FlutterPlugin.FlutterPluginBinding) {
+    private fun setupPostureChannel(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         postureEventChannel = EventChannel(
             binding.binaryMessenger,
-            "com.s_health/posture_stream"
+            "com.s_health/posture_stream",
         )
 
-        postureEventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(
-                arguments: Any?,
-                events: EventChannel.EventSink?
-            ) {
-                postureEventSink = events
-                registerPostureReceiver()
-            }
+        postureEventChannel?.setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink?,
+                ) {
+                    postureEventSink = events
+                    registerPostureReceiver()
+                }
 
-            override fun onCancel(arguments: Any?) {
-                unregisterPostureReceiver()
-                postureEventSink = null
-            }
-        })
+                override fun onCancel(arguments: Any?) {
+                    unregisterPostureReceiver()
+                    postureEventSink = null
+                }
+            },
+        )
     }
 
-    private fun setupLightChannel(binding: FlutterPlugin.FlutterPluginBinding) {
+    private fun setupLightChannel(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         lightEventChannel = EventChannel(
             binding.binaryMessenger,
-            "com.s_health/light_stream"
+            "com.s_health/light_stream",
         )
 
-        lightEventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(
-                arguments: Any?,
-                events: EventChannel.EventSink?
-            ) {
-                lightEventSink = events
-                registerLightReceiver()
-            }
+        lightEventChannel?.setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink?,
+                ) {
+                    lightEventSink = events
+                    registerLightReceiver()
+                }
 
-            override fun onCancel(arguments: Any?) {
-                unregisterLightReceiver()
-                lightEventSink = null
-            }
-        })
+                override fun onCancel(arguments: Any?) {
+                    unregisterLightReceiver()
+                    lightEventSink = null
+                }
+            },
+        )
     }
 
-    private fun setupHunchChannel(binding: FlutterPlugin.FlutterPluginBinding) {
+    private fun setupHunchChannel(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         hunchEventChannel = EventChannel(
             binding.binaryMessenger,
-            "com.s_health/hunch_stream"
+            "com.s_health/hunch_stream",
         )
 
-        hunchEventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(
-                arguments: Any?,
-                events: EventChannel.EventSink?
-            ) {
-                hunchEventSink = events
-                registerHunchReceiver()
-            }
+        hunchEventChannel?.setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(
+                    arguments: Any?,
+                    events: EventChannel.EventSink?,
+                ) {
+                    hunchEventSink = events
+                    registerHunchReceiver()
+                }
 
-            override fun onCancel(arguments: Any?) {
-                unregisterHunchReceiver()
-                hunchEventSink = null
-            }
-        })
+                override fun onCancel(arguments: Any?) {
+                    unregisterHunchReceiver()
+                    hunchEventSink = null
+                }
+            },
+        )
     }
 
-    private fun setupMethodChannel(binding: FlutterPlugin.FlutterPluginBinding) {
+    private fun setupMethodChannel(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         cameraMethodChannel = MethodChannel(
             binding.binaryMessenger,
-            "com.s_health/camera_control"
+            "com.s_health/camera_control",
         )
 
         cameraMethodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "startCamera" -> {
-                    /*
-                     * Canonical Flutter argument:
-                     * { "hunch_divisor": value }
-                     *
-                     * "hunchDivisor" is accepted temporarily too, so older
-                     * Dart code does not break during the migration.
-                     */
-                    val divisor = readHunchDivisorFromCall(call.arguments)
+                    val divisor =
+                        readHunchDivisorFromCall(
+                            call.arguments,
+                        )
 
-                    if (divisor == null || !divisor.isFinite() || divisor <= 0.0) {
+                    if (
+                        divisor == null ||
+                        !divisor.isFinite() ||
+                        divisor <= 0.0
+                    ) {
                         result.error(
                             "INVALID_HUNCH_DIVISOR",
                             "startCamera requires a valid positive hunch_divisor.",
-                            null
+                            null,
                         )
                         return@setMethodCallHandler
                     }
 
-                    Log.d(TAG, "Starting camera with hunch_divisor=$divisor")
+                    Log.d(
+                        TAG,
+                        "Starting camera with hunch_divisor=$divisor",
+                    )
 
                     saveHunchDivisor(divisor)
-                    startCameraService(binding.applicationContext, divisor)
+                    startCameraService(
+                        binding.applicationContext,
+                        divisor,
+                    )
 
                     result.success(
                         mapOf(
                             "status" to "CameraStarted",
-                            "hunch_divisor" to divisor
+                            "hunch_divisor" to divisor,
+                        ),
+                    )
+                }
+
+                "saveHunchDivisor" -> {
+                    val divisor =
+                        readHunchDivisorFromCall(
+                            call.arguments,
                         )
+
+                    if (
+                        divisor == null ||
+                        !divisor.isFinite() ||
+                        divisor <= 0.0
+                    ) {
+                        result.error(
+                            "INVALID_HUNCH_DIVISOR",
+                            "saveHunchDivisor requires a valid positive hunch_divisor.",
+                            null,
+                        )
+                        return@setMethodCallHandler
+                    }
+
+                    saveHunchDivisor(divisor)
+
+                    Log.d(
+                        TAG,
+                        "Saved native hunch_divisor=$divisor",
+                    )
+
+                    result.success(
+                        mapOf(
+                            "hunch_divisor" to divisor,
+                        ),
+                    )
+                }
+
+                "getSavedHunchDivisor" -> {
+                    result.success(
+                        getSavedHunchDivisor(),
                     )
                 }
 
                 "stopCamera" -> {
-                    Log.d(TAG, "Stopping camera")
-                    stopCameraService(binding.applicationContext)
+                    Log.d(
+                        TAG,
+                        "Stopping camera",
+                    )
+
+                    stopCameraService(
+                        binding.applicationContext,
+                    )
+
                     result.success("CameraStopped")
                 }
 
                 "startLightMonitor" -> {
-                    Log.d(TAG, "Starting ambient-light monitor")
-                    startLightService(binding.applicationContext)
+                    Log.d(
+                        TAG,
+                        "Starting ambient-light monitor",
+                    )
+
+                    startLightService(
+                        binding.applicationContext,
+                    )
+
                     result.success("LightStarted")
                 }
 
                 "stopLightMonitor" -> {
-                    Log.d(TAG, "Stopping ambient-light monitor")
-                    stopLightService(binding.applicationContext)
-                    result.success("LightStopped")
-                }
+                    Log.d(
+                        TAG,
+                        "Stopping ambient-light monitor",
+                    )
 
-                "getSavedHunchDivisor" -> {
-                    result.success(getSavedHunchDivisor())
+                    stopLightService(
+                        binding.applicationContext,
+                    )
+
+                    result.success("LightStopped")
                 }
 
                 else -> result.notImplemented()
@@ -230,41 +319,73 @@ class SHealthMonitorPlugin : FlutterPlugin {
         }
     }
 
-    private fun readHunchDivisorFromCall(arguments: Any?): Double? {
-        val args = arguments as? Map<*, *> ?: return null
+    private fun readHunchDivisorFromCall(
+        arguments: Any?,
+    ): Double? {
+        val args = arguments as? Map<*, *>
+            ?: return null
 
-        val canonicalValue = args[EXTRA_HUNCH_DIVISOR]
-        val legacyValue = args["hunchDivisor"]
+        val canonicalValue =
+            args[EXTRA_HUNCH_DIVISOR]
+        val legacyValue =
+            args["hunchDivisor"]
 
-        return when (val value = canonicalValue ?: legacyValue) {
+        return when (
+            val value = canonicalValue ?: legacyValue
+        ) {
             is Number -> value.toDouble()
             is String -> value.toDoubleOrNull()
             else -> null
         }
     }
 
-    private fun saveHunchDivisor(divisor: Double) {
-        val context = applicationContext ?: return
+    private fun saveHunchDivisor(
+        divisor: Double,
+    ) {
+        val context = applicationContext
+            ?: return
 
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        context
+            .getSharedPreferences(
+                PREFS_NAME,
+                Context.MODE_PRIVATE,
+            )
             .edit()
-            .putFloat(PREF_HUNCH_DIVISOR, divisor.toFloat())
+            .putFloat(
+                PREF_HUNCH_DIVISOR,
+                divisor.toFloat(),
+            )
             .apply()
     }
 
     private fun getSavedHunchDivisor(): Double? {
-        val context = applicationContext ?: return null
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val context = applicationContext
+            ?: return null
+
+        val prefs = context.getSharedPreferences(
+            PREFS_NAME,
+            Context.MODE_PRIVATE,
+        )
 
         if (!prefs.contains(PREF_HUNCH_DIVISOR)) {
             return null
         }
 
-        val divisor = prefs.getFloat(PREF_HUNCH_DIVISOR, 0f).toDouble()
-        return divisor.takeIf { it.isFinite() && it > 0.0 }
+        val divisor = prefs
+            .getFloat(
+                PREF_HUNCH_DIVISOR,
+                0f,
+            )
+            .toDouble()
+
+        return divisor.takeIf {
+            it.isFinite() && it > 0.0
+        }
     }
 
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onDetachedFromEngine(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
         unregisterDistanceReceiver()
         unregisterPostureReceiver()
         unregisterHunchReceiver()
@@ -291,17 +412,24 @@ class SHealthMonitorPlugin : FlutterPlugin {
         applicationContext = null
     }
 
-    // ===== Distance receiver =====
-
     private fun registerDistanceReceiver() {
         val context = applicationContext ?: return
         if (distanceReceiver != null) return
 
         distanceReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                if (intent.action != DISTANCE_BROADCAST_ACTION) return
+            override fun onReceive(
+                ctx: Context,
+                intent: Intent,
+            ) {
+                if (intent.action != DISTANCE_BROADCAST_ACTION) {
+                    return
+                }
 
-                val distance = intent.getDoubleExtra(EXTRA_DISTANCE, 0.0)
+                val distance = intent.getDoubleExtra(
+                    EXTRA_DISTANCE,
+                    0.0,
+                )
+
                 distanceEventSink?.success(distance)
             }
         }
@@ -309,7 +437,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
         registerReceiver(
             context = context,
             receiver = distanceReceiver!!,
-            action = DISTANCE_BROADCAST_ACTION
+            action = DISTANCE_BROADCAST_ACTION,
         )
     }
 
@@ -318,27 +446,40 @@ class SHealthMonitorPlugin : FlutterPlugin {
         distanceReceiver = null
     }
 
-    // ===== Posture receiver =====
-
     private fun registerPostureReceiver() {
         val context = applicationContext ?: return
         if (postureReceiver != null) return
 
         postureReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                if (intent.action != POSTURE_BROADCAST_ACTION) return
+            override fun onReceive(
+                ctx: Context,
+                intent: Intent,
+            ) {
+                if (intent.action != POSTURE_BROADCAST_ACTION) {
+                    return
+                }
 
-                val status = intent.getStringExtra(EXTRA_POSTURE_STATUS) ?: "unknown"
-                val pitch = intent.getFloatExtra(EXTRA_PITCH, 0f)
-                val roll = intent.getFloatExtra(EXTRA_ROLL, 0f)
+                val status = intent.getStringExtra(
+                    EXTRA_POSTURE_STATUS,
+                ) ?: "unknown"
+
+                val pitch = intent.getFloatExtra(
+                    EXTRA_PITCH,
+                    0f,
+                )
+
+                val roll = intent.getFloatExtra(
+                    EXTRA_ROLL,
+                    0f,
+                )
 
                 postureEventSink?.success(
                     mapOf(
                         "status" to status,
                         "pitch" to pitch.toDouble(),
                         "roll" to roll.toDouble(),
-                        "timestamp" to System.currentTimeMillis()
-                    )
+                        "timestamp" to System.currentTimeMillis(),
+                    ),
                 )
             }
         }
@@ -346,7 +487,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
         registerReceiver(
             context = context,
             receiver = postureReceiver!!,
-            action = POSTURE_BROADCAST_ACTION
+            action = POSTURE_BROADCAST_ACTION,
         )
     }
 
@@ -355,25 +496,35 @@ class SHealthMonitorPlugin : FlutterPlugin {
         postureReceiver = null
     }
 
-    // ===== Hunch receiver =====
-
     private fun registerHunchReceiver() {
         val context = applicationContext ?: return
         if (hunchReceiver != null) return
 
         hunchReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                if (intent.action != HUNCH_BROADCAST_ACTION) return
+            override fun onReceive(
+                ctx: Context,
+                intent: Intent,
+            ) {
+                if (intent.action != HUNCH_BROADCAST_ACTION) {
+                    return
+                }
 
-                val isHunching = intent.getBooleanExtra(EXTRA_HUNCH_STATUS, false)
-                val ratio = intent.getFloatExtra(EXTRA_HUNCH_RATIO, 0f)
+                val isHunching = intent.getBooleanExtra(
+                    EXTRA_HUNCH_STATUS,
+                    false,
+                )
+
+                val ratio = intent.getFloatExtra(
+                    EXTRA_HUNCH_RATIO,
+                    0f,
+                )
 
                 hunchEventSink?.success(
                     mapOf(
                         "is_hunching" to isHunching,
                         "hunch_ratio" to ratio.toDouble(),
-                        "timestamp" to System.currentTimeMillis()
-                    )
+                        "timestamp" to System.currentTimeMillis(),
+                    ),
                 )
             }
         }
@@ -381,7 +532,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
         registerReceiver(
             context = context,
             receiver = hunchReceiver!!,
-            action = HUNCH_BROADCAST_ACTION
+            action = HUNCH_BROADCAST_ACTION,
         )
     }
 
@@ -390,23 +541,29 @@ class SHealthMonitorPlugin : FlutterPlugin {
         hunchReceiver = null
     }
 
-    // ===== Ambient light receiver =====
-
     private fun registerLightReceiver() {
         val context = applicationContext ?: return
         if (lightReceiver != null) return
 
         lightReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                if (intent.action != LIGHT_BROADCAST_ACTION) return
+            override fun onReceive(
+                ctx: Context,
+                intent: Intent,
+            ) {
+                if (intent.action != LIGHT_BROADCAST_ACTION) {
+                    return
+                }
 
-                val lux = intent.getDoubleExtra(EXTRA_LIGHT_LUX, 0.0)
+                val lux = intent.getDoubleExtra(
+                    EXTRA_LIGHT_LUX,
+                    0.0,
+                )
 
                 lightEventSink?.success(
                     mapOf(
                         "lightLux" to lux,
-                        "timestamp" to System.currentTimeMillis()
-                    )
+                        "timestamp" to System.currentTimeMillis(),
+                    ),
                 )
             }
         }
@@ -414,7 +571,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
         registerReceiver(
             context = context,
             receiver = lightReceiver!!,
-            action = LIGHT_BROADCAST_ACTION
+            action = LIGHT_BROADCAST_ACTION,
         )
     }
 
@@ -423,12 +580,10 @@ class SHealthMonitorPlugin : FlutterPlugin {
         lightReceiver = null
     }
 
-    // ===== Broadcast receiver helpers =====
-
     private fun registerReceiver(
         context: Context,
         receiver: BroadcastReceiver,
-        action: String
+        action: String,
     ) {
         val filter = IntentFilter(action)
 
@@ -436,14 +591,19 @@ class SHealthMonitorPlugin : FlutterPlugin {
             context.registerReceiver(
                 receiver,
                 filter,
-                Context.RECEIVER_NOT_EXPORTED
+                Context.RECEIVER_NOT_EXPORTED,
             )
         } else {
-            context.registerReceiver(receiver, filter)
+            context.registerReceiver(
+                receiver,
+                filter,
+            )
         }
     }
 
-    private fun unregisterReceiverSafely(receiver: BroadcastReceiver?) {
+    private fun unregisterReceiverSafely(
+        receiver: BroadcastReceiver?,
+    ) {
         val context = applicationContext ?: return
         if (receiver == null) return
 
@@ -454,14 +614,22 @@ class SHealthMonitorPlugin : FlutterPlugin {
         }
     }
 
-    // ===== Service control =====
-
-    private fun startCameraService(context: Context, hunchDivisor: Double) {
+    private fun startCameraService(
+        context: Context,
+        hunchDivisor: Double,
+    ) {
         val intent = Intent().apply {
-            setClassName(context, "com.example.monitor.CameraService")
+            setClassName(
+                context,
+                "com.example.monitor.CameraService",
+            )
+
             action = ACTION_START_CAMERA
 
-            putExtra("hunch_divisor", hunchDivisor)
+            putExtra(
+                EXTRA_HUNCH_DIVISOR,
+                hunchDivisor,
+            )
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -471,18 +639,31 @@ class SHealthMonitorPlugin : FlutterPlugin {
         }
     }
 
-    private fun stopCameraService(context: Context) {
+    private fun stopCameraService(
+        context: Context,
+    ) {
         val intent = Intent().apply {
-            setClassName(context, "com.example.monitor.CameraService")
-            action = ACTION_STOP_CAMERA
+            setClassName(
+                context,
+                "com.example.monitor.CameraService",
+            )
         }
 
-        context.startService(intent)
+        // Stopping a service must not start a new service instance. Using
+        // startService() here could recreate CameraService solely to stop it,
+        // which was the source of a release-only ML Kit crash in the old flow.
+        context.stopService(intent)
     }
 
-    private fun startLightService(context: Context) {
+    private fun startLightService(
+        context: Context,
+    ) {
         val intent = Intent().apply {
-            setClassName(context, "com.example.monitor.AmbientLightService")
+            setClassName(
+                context,
+                "com.example.monitor.AmbientLightService",
+            )
+
             action = ACTION_START_LIGHT
         }
 
@@ -493,12 +674,16 @@ class SHealthMonitorPlugin : FlutterPlugin {
         }
     }
 
-    private fun stopLightService(context: Context) {
+    private fun stopLightService(
+        context: Context,
+    ) {
         val intent = Intent().apply {
-            setClassName(context, "com.example.monitor.AmbientLightService")
-            action = ACTION_STOP_LIGHT
+            setClassName(
+                context,
+                "com.example.monitor.AmbientLightService",
+            )
         }
 
-        context.startService(intent)
+        context.stopService(intent)
     }
 }
