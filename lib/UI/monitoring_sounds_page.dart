@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../backend/monitoring_audio_manager.dart';
+import '../services/app_permission_manager.dart';
 
 class MonitoringSoundsPage extends StatefulWidget {
   const MonitoringSoundsPage({super.key});
@@ -102,22 +103,37 @@ class _MonitoringSoundsPageState extends State<MonitoringSoundsPage> {
 
   Future<void> _startRecording(String alert) async {
     if (recordingAlert != null) return;
+
     try {
-      if (!await audio.hasRecordingPermission()) {
-        _toast('برای ضبط صدا، اجازه استفاده از میکروفون را فعال کنید.');
+      final microphoneGranted =
+          await AppPermissionManager.ensureMicrophonePermission();
+
+      if (!microphoneGranted) {
+        _toast(
+          'برای ضبط صدا، اجازه استفاده از میکروفون را فعال کنید.',
+        );
         return;
       }
+
       await audio.startRecording(alert);
+
       if (!mounted) return;
+
       setState(() {
         recordingAlert = alert;
         recordingDuration = Duration.zero;
       });
+
       recordingTimer?.cancel();
-      recordingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!mounted || recordingAlert == null) return;
-        setState(() => recordingDuration += const Duration(seconds: 1));
-      });
+      recordingTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) {
+          if (!mounted || recordingAlert == null) return;
+          setState(
+            () => recordingDuration += const Duration(seconds: 1),
+          );
+        },
+      );
     } catch (_) {
       _toast('شروع ضبط صدا انجام نشد.');
     }
@@ -200,17 +216,25 @@ class _MonitoringSoundsPageState extends State<MonitoringSoundsPage> {
     }
   }
 
-  String _duration(Duration d) => '${d.inMinutes.remainder(60).toString().padLeft(2, '0')}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+  String _duration(Duration d) =>
+      '${d.inMinutes.remainder(60).toString().padLeft(2, '0')}:'
+      '${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
 
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message), behavior: SnackBarBehavior.floating));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   Future<void> _options(String alert) async {
     final current = configs[alert];
+
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -220,129 +244,368 @@ class _MonitoringSoundsPageState extends State<MonitoringSoundsPage> {
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
           decoration: const BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(28),
+            ),
           ),
           child: SafeArea(
             top: false,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 42, height: 4, margin: const EdgeInsets.only(bottom: 16), decoration: BoxDecoration(color: line, borderRadius: BorderRadius.circular(4))),
-              Text(labels[alert]!, style: const TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 5),
-              const Text('صدایی را انتخاب کنید که هنگام هشدار پخش شود.', style: TextStyle(color: sub, fontSize: 10)),
-              const SizedBox(height: 18),
-              _option(sheet, Icons.volume_up_outlined, 'صدای پیش‌فرض سی', 'صدای آماده و کوتاه برای این هشدار', current?.type == MonitoringSoundType.defaultSound, () async { Navigator.pop(sheet); await _default(alert); }),
-              _option(sheet, Icons.mic_none_rounded, 'ضبط صدای خودم', 'یک پیام کوتاه با صدای خودتان ضبط کنید', current?.type == MonitoringSoundType.recorded, () { Navigator.pop(sheet); _startRecording(alert); }),
-              _option(sheet, Icons.audio_file_outlined, 'انتخاب از دستگاه', 'فایل صوتی موجود روی گوشی', current?.type == MonitoringSoundType.custom, () { Navigator.pop(sheet); _pickFile(alert); }),
-              _option(sheet, Icons.volume_off_outlined, 'بدون صدا', 'فقط هشدار تصویری نمایش داده شود', current?.type == MonitoringSoundType.none, () async { Navigator.pop(sheet); await _disable(alert); }),
-            ]),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: line,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                Text(
+                  labels[alert]!,
+                  style: const TextStyle(
+                    color: text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'صدایی را انتخاب کنید که هنگام هشدار پخش شود.',
+                  style: TextStyle(
+                    color: sub,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _option(
+                  sheet,
+                  Icons.volume_up_outlined,
+                  'صدای پیش‌فرض سی',
+                  'صدای آماده و کوتاه برای این هشدار',
+                  current?.type == MonitoringSoundType.defaultSound,
+                  () async {
+                    Navigator.pop(sheet);
+                    await _default(alert);
+                  },
+                ),
+                _option(
+                  sheet,
+                  Icons.mic_none_rounded,
+                  'ضبط صدای خودم',
+                  'یک پیام کوتاه با صدای خودتان ضبط کنید',
+                  current?.type == MonitoringSoundType.recorded,
+                  () {
+                    Navigator.pop(sheet);
+                    _startRecording(alert);
+                  },
+                ),
+                _option(
+                  sheet,
+                  Icons.audio_file_outlined,
+                  'انتخاب از دستگاه',
+                  'فایل صوتی موجود روی گوشی',
+                  current?.type == MonitoringSoundType.custom,
+                  () {
+                    Navigator.pop(sheet);
+                    _pickFile(alert);
+                  },
+                ),
+                _option(
+                  sheet,
+                  Icons.volume_off_outlined,
+                  'بدون صدا',
+                  'فقط هشدار تصویری نمایش داده شود',
+                  current?.type == MonitoringSoundType.none,
+                  () async {
+                    Navigator.pop(sheet);
+                    await _disable(alert);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _option(BuildContext sheet, IconData icon, String title, String subtitle, bool selected, VoidCallback onTap) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(color: selected ? mint : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: selected ? green : line)),
-          child: Row(children: [
-            _circle(icon, selected ? green : sub),
-            const SizedBox(width: 11),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 3),
-              Text(subtitle, style: const TextStyle(color: sub, fontSize: 9)),
-            ])),
-            Icon(selected ? Icons.check_circle_rounded : Icons.chevron_left_rounded, color: selected ? green : sub, size: 20),
-          ]),
+  Widget _option(
+    BuildContext sheet,
+    IconData icon,
+    String title,
+    String subtitle,
+    bool selected,
+    VoidCallback onTap,
+  ) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: selected ? mint : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: selected ? green : line,
+                ),
+              ),
+              child: Row(
+                children: [
+                  _circle(
+                    icon,
+                    selected ? green : sub,
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: text,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: sub,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.chevron_left_rounded,
+                    color: selected ? green : sub,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
-    ),
-  );
+      );
 
   Widget _circle(IconData icon, Color color) => Container(
-    width: 42,
-    height: 42,
-    decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
-    child: Icon(icon, color: color, size: 20),
-  );
+        width: 42,
+        height: 42,
+        decoration: const BoxDecoration(
+          color: mint,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          color: color,
+          size: 20,
+        ),
+      );
 
   Widget _card(String alert) {
     final c = configs[alert];
     final recording = recordingAlert == alert;
     final playing = playingAlert == alert;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: line)),
-      child: Column(children: [
-        Row(children: [
-          _circle(_icon(c), c?.type == MonitoringSoundType.none ? sub : green),
-          const SizedBox(width: 11),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(labels[alert]!, style: const TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text(_name(c), style: const TextStyle(color: sub, fontSize: 9)),
-          ])),
-          IconButton(onPressed: c == null || c.isDisabled || playing ? null : () => _preview(alert), icon: Icon(playing ? Icons.graphic_eq_rounded : Icons.play_circle_outline_rounded, color: c?.isDisabled == true ? line : green)),
-          IconButton(onPressed: busy || recording ? null : () => _options(alert), icon: const Icon(Icons.tune_rounded, color: text)),
-        ]),
-        if (recording)
-          Container(
-            margin: const EdgeInsets.only(top: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: mint, borderRadius: BorderRadius.circular(15)),
-            child: Row(children: [
-              const Icon(Icons.fiber_manual_record_rounded, color: Colors.redAccent, size: 12),
-              const SizedBox(width: 7),
-              Text('در حال ضبط  ${_duration(recordingDuration)}', style: const TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)),
-              const Spacer(),
-              TextButton(onPressed: _cancelRecording, child: const Text('لغو')),
-              FilledButton.icon(onPressed: () => _stopRecording(alert), style: FilledButton.styleFrom(backgroundColor: green, foregroundColor: text), icon: const Icon(Icons.stop_rounded, size: 16), label: const Text('ذخیره')),
-            ]),
-          )
-        else if (c?.isCustom == true)
-          Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: busy ? null : () => _default(alert), icon: const Icon(Icons.restore_rounded, size: 16), label: const Text('بازگشت به صدای پیش‌فرض'))),
-      ]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: line),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _circle(
+                _icon(c),
+                c?.type == MonitoringSoundType.none ? sub : green,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      labels[alert]!,
+                      style: const TextStyle(
+                        color: text,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _name(c),
+                      style: const TextStyle(
+                        color: sub,
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed:
+                    c == null || c.isDisabled || playing
+                        ? null
+                        : () => _preview(alert),
+                icon: Icon(
+                  playing
+                      ? Icons.graphic_eq_rounded
+                      : Icons.play_circle_outline_rounded,
+                  color: c?.isDisabled == true ? line : green,
+                ),
+              ),
+              IconButton(
+                onPressed:
+                    busy || recording ? null : () => _options(alert),
+                icon: const Icon(
+                  Icons.tune_rounded,
+                  color: text,
+                ),
+              ),
+            ],
+          ),
+          if (recording)
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: mint,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.fiber_manual_record_rounded,
+                    color: Colors.redAccent,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    'در حال ضبط  ${_duration(recordingDuration)}',
+                    style: const TextStyle(
+                      color: text,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _cancelRecording,
+                    child: const Text('لغو'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => _stopRecording(alert),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: green,
+                      foregroundColor: text,
+                    ),
+                    icon: const Icon(
+                      Icons.stop_rounded,
+                      size: 16,
+                    ),
+                    label: const Text('ذخیره'),
+                  ),
+                ],
+              ),
+            )
+          else if (c?.isCustom == true)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed:
+                    busy ? null : () => _default(alert),
+                icon: const Icon(
+                  Icons.restore_rounded,
+                  size: 16,
+                ),
+                label: const Text('بازگشت به صدای پیش‌فرض'),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) => Directionality(
-    textDirection: TextDirection.rtl,
-    child: Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_forward_rounded, color: text)),
-        title: const Text('صداهای پایش', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900)),
-        centerTitle: true,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(15),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(color: mint, borderRadius: BorderRadius.circular(20)),
-            child: const Row(children: [
-              Icon(Icons.record_voice_over_outlined, color: green, size: 22),
-              SizedBox(width: 10),
-              Expanded(child: Text('برای هر هشدار می‌توانید صدای پیش‌فرض سی، صدای خودتان یا یک فایل صوتی از دستگاه را انتخاب کنید.', style: TextStyle(color: text, fontSize: 10, height: 1.5))),
-            ]),
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: bg,
+          appBar: AppBar(
+            backgroundColor: bg,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            leading: IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(
+                Icons.arrow_forward_rounded,
+                color: text,
+              ),
+            ),
+            title: const Text(
+              'صداهای پایش',
+              style: TextStyle(
+                color: text,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            centerTitle: true,
           ),
-          for (final alert in MonitoringAudioManager.alertTypes) _card(alert),
-        ],
-      ),
-    ),
-  );
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 30),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(15),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: mint,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.record_voice_over_outlined,
+                      color: green,
+                      size: 22,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'برای هر هشدار می‌توانید صدای پیش‌فرض سی، صدای خودتان یا یک فایل صوتی از دستگاه را انتخاب کنید.',
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 10,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              for (final alert in MonitoringAudioManager.alertTypes)
+                _card(alert),
+            ],
+          ),
+        ),
+      );
 }
