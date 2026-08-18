@@ -1,10 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../backend/daily_health_metric.dart';
 import '../backend/health_data_repository.dart';
@@ -23,7 +20,8 @@ class MainNavigationScreen extends StatefulWidget {
   });
 
   @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  State<MainNavigationScreen> createState() =>
+      _MainNavigationScreenState();
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
@@ -34,14 +32,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   int currentIndex = 0;
 
-  late final List<Widget> pages;
-  late final List<_NavItem> navItems;
+  late List<Widget> pages;
+  late List<_NavItem> navItems;
 
   StreamSubscription<Map<String, dynamic>?>? statusSubscription;
   Timer? monitoringPollTimer;
 
   bool serviceAlive = false;
-  bool startingMonitoring = false;
 
   bool get monitoringActive => serviceAlive;
 
@@ -75,7 +72,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ];
 
     if (widget.userGender == 'female') {
-      pages.add(const WomensHealthPage());
+      pages.add(
+        const WomensHealthPage(),
+      );
 
       navItems.add(
         const _NavItem(
@@ -85,7 +84,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       );
     }
 
-    pages.add(const ProfilePage());
+    pages.add(
+      const ProfilePage(),
+    );
 
     navItems.add(
       const _NavItem(
@@ -94,6 +95,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
     );
 
+    // We ONLY observe the monitoring service here.
+    //
+    // IMPORTANT:
+    // There is deliberately NO automatic monitoring startup.
+    // Opening the dashboard will not:
+    // - request camera permission
+    // - request notification permission
+    // - request overlay permission
+    // - check calibration
+    // - initialize the background service
+    // - start the background service
+    //
+    // Monitoring must be explicitly started elsewhere by the user.
+
     _listenToService();
     _refreshMonitoringState();
 
@@ -101,14 +116,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const Duration(seconds: 2),
           (_) => _refreshMonitoringState(),
     );
-
-    WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _ensureMonitoringPermission(),
-    );
   }
 
   void _goTo(int index) {
     if (!mounted) return;
+
+    if (index < 0 || index >= pages.length) {
+      return;
+    }
 
     setState(() {
       currentIndex = index;
@@ -117,7 +132,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Future<void> _refreshMonitoringState() async {
     try {
-      final running = await BackgroundMonitorService.isRunning;
+      final running =
+      await BackgroundMonitorService.isRunning;
 
       if (!mounted || running == serviceAlive) {
         return;
@@ -126,7 +142,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       setState(() {
         serviceAlive = running;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint(
+        '[Dashboard] monitoring state error: $e',
+      );
+
       if (!mounted) return;
 
       if (serviceAlive) {
@@ -137,200 +157,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Future<void> _ensureMonitoringPermission() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (!mounted) return;
-
-    final agreed = prefs.getBool('has_agreed_privacy') == true;
-
-    if (!agreed) {
-      _showPrivacyDialog(prefs);
-      return;
-    }
-
-    await _startMonitoring();
-  }
-
-  Future<void> _startMonitoring() async {
-    if (startingMonitoring) {
-      return;
-    }
-
-    startingMonitoring = true;
-
-    try {
-      final permissions = await <Permission>[
-        Permission.camera,
-        Permission.notification,
-      ].request();
-
-      final cameraPermission = permissions[Permission.camera];
-
-      if (cameraPermission == null || !cameraPermission.isGranted) {
-        _message(
-          'برای پایش بدن، اجازه دوربین لازم است.',
-          error: true,
-        );
-        return;
-      }
-
-      final overlayGranted =
-      await FlutterOverlayWindow.isPermissionGranted();
-
-      if (!overlayGranted) {
-        await FlutterOverlayWindow.requestPermission();
-      }
-
-      final user = Supabase.instance.client.auth.currentUser;
-
-      if (user == null) {
-        return;
-      }
-
-      final row = await Supabase.instance.client
-          .from('users')
-          .select('hunch_divisor')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      final divisor = (row?['hunch_divisor'] as num?)?.toDouble();
-
-      if (divisor == null ||
-          !divisor.isFinite ||
-          divisor <= 0) {
-        _message(
-          'ابتدا کالیبراسیون وضعیت بدن را انجام دهید.',
-          error: true,
-        );
-        return;
-      }
-
-      await BackgroundMonitorService.saveHunchDivisor(divisor);
-
-      await BackgroundMonitorService.initialize();
-
-      final running = await BackgroundMonitorService.isRunning;
-
-      if (!running) {
-        BackgroundMonitorService.start();
-      }
-
-      await _refreshMonitoringState();
-    } catch (e) {
-      debugPrint('[Dashboard] monitoring error: $e');
-
-      _message(
-        'فعال‌سازی پایش با خطا مواجه شد.',
-        error: true,
-      );
-    } finally {
-      startingMonitoring = false;
-    }
-  }
-
   void _listenToService() {
     statusSubscription?.cancel();
 
     statusSubscription =
-        BackgroundMonitorService.statusStream.listen((event) {
-          if (!mounted || event == null) {
-            return;
-          }
+        BackgroundMonitorService.statusStream.listen(
+              (event) {
+            if (!mounted || event == null) {
+              return;
+            }
 
-          final running = event['running'] == true;
+            final running = event['running'] == true;
 
-          if (running == serviceAlive) {
-            return;
-          }
+            if (running == serviceAlive) {
+              return;
+            }
 
-          setState(() {
-            serviceAlive = running;
-          });
-        });
-  }
-
-  void _showPrivacyDialog(SharedPreferences prefs) {
-    bool checked = false;
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: StatefulBuilder(
-            builder: (context, setLocalState) {
-              return AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                title: const Text(
-                  'حریم خصوصی و پایش',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'برای پایش وضعیت بدن، دوربین در پس‌زمینه استفاده می‌شود. '
-                          'پردازش وضعیت بدن روی دستگاه انجام می‌شود و تصویر خام '
-                          'برای این قابلیت ذخیره یا ارسال نمی‌شود.',
-                    ),
-                    const SizedBox(height: 14),
-                    CheckboxListTile(
-                      value: checked,
-                      onChanged: (value) {
-                        setLocalState(() {
-                          checked = value ?? false;
-                        });
-                      },
-                      activeColor: green,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'شرایط و دسترسی‌ها را می‌پذیرم.',
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: !checked
-                          ? null
-                          : () async {
-                        await prefs.setBool(
-                          'has_agreed_privacy',
-                          true,
-                        );
-
-                        if (!mounted) return;
-
-                        Navigator.of(dialogContext).pop();
-
-                        await _startMonitoring();
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: green,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                        ),
-                      ),
-                      child: const Text(
-                        'تأیید و ادامه',
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
+            setState(() {
+              serviceAlive = running;
+            });
+          },
         );
-      },
-    );
   }
 
   void _message(
@@ -373,7 +220,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             children: pages,
           ),
         ),
-        bottomNavigationBar: _buildBottomNavigationBar(),
+        bottomNavigationBar:
+        _buildBottomNavigationBar(),
       ),
     );
   }
@@ -404,22 +252,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           children: List.generate(
             navItems.length,
                 (index) {
-              final selected = index == currentIndex;
+              final selected =
+                  index == currentIndex;
+
               final item = navItems[index];
 
               return Expanded(
                 child: InkWell(
                   onTap: () => _goTo(index),
+                  borderRadius:
+                  BorderRadius.circular(17),
                   child: AnimatedContainer(
-                    duration: const Duration(
-                      milliseconds: 180,
-                    ),
+                    duration:
+                    const Duration(milliseconds: 180),
                     margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: selected
                           ? green.withValues(alpha: 0.12)
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(17),
+                      borderRadius:
+                      BorderRadius.circular(17),
                     ),
                     child: Column(
                       mainAxisAlignment:
@@ -428,15 +280,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         Icon(
                           item.icon,
                           size: 21,
-                          color:
-                          selected ? green : subtext,
+                          color: selected
+                              ? green
+                              : subtext,
                         ),
                         const SizedBox(height: 3),
                         Text(
                           item.label,
                           style: TextStyle(
-                            color:
-                            selected ? green : subtext,
+                            color: selected
+                                ? green
+                                : subtext,
                             fontSize: 9,
                             fontWeight: selected
                                 ? FontWeight.w900
@@ -466,6 +320,10 @@ class _NavItem {
       );
 }
 
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+
 class _DashboardHome extends StatefulWidget {
   final bool Function() isMonitoringActive;
   final VoidCallback onPosture;
@@ -482,9 +340,11 @@ class _DashboardHome extends StatefulWidget {
       _DashboardHomeState();
 }
 
-class _DashboardHomeState extends State<_DashboardHome> {
+class _DashboardHomeState
+    extends State<_DashboardHome> {
   static const Color green = Color(0xFF42D2A7);
   static const Color teal = Color(0xFF45C4D0);
+  static const Color bg = Color(0xFFF4F9F7);
   static const Color text = Color(0xFF263B37);
   static const Color subtext = Color(0xFF7D8D89);
   static const Color line = Color(0xFFE8EFEC);
@@ -518,7 +378,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
       setState(() {
         today = rows.isEmpty
             ? null
-            : DailyHealthMetric.fromMap(rows.first);
+            : DailyHealthMetric.fromMap(
+          rows.first,
+        );
 
         water = prefs.getInt(_waterKey()) ?? 0;
 
@@ -528,7 +390,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
         loading = false;
       });
     } catch (e) {
-      debugPrint('[Dashboard] load error: $e');
+      debugPrint(
+        '[Dashboard] load error: $e',
+      );
 
       if (!mounted) return;
 
@@ -541,13 +405,19 @@ class _DashboardHomeState extends State<_DashboardHome> {
   String _waterKey() {
     final date = DateTime.now();
 
-    return 'si_water_${date.year}_${date.month}_${date.day}';
+    return 'si_water_'
+        '${date.year}_'
+        '${date.month}_'
+        '${date.day}';
   }
 
   String _socialKey() {
     final date = DateTime.now();
 
-    return 'si_social_${date.year}_${date.month}_${date.day}';
+    return 'si_social_'
+        '${date.year}_'
+        '${date.month}_'
+        '${date.day}';
   }
 
   Future<void> _addWater() async {
@@ -603,19 +473,23 @@ class _DashboardHomeState extends State<_DashboardHome> {
   }
 
   int get score {
-    final healthScore = today?.healthScore;
+    final healthScore =
+        today?.healthScore;
 
     if (healthScore != null) {
-      return healthScore;
+      return healthScore.clamp(0, 100);
     }
 
     if (risk == 0) {
       return 100;
     }
 
-    final calculated = 100 - (risk * 0.8);
+    final calculated =
+        100 - (risk * 0.8);
 
-    return calculated.clamp(0, 100).round();
+    return calculated
+        .clamp(0, 100)
+        .round();
   }
 
   String _minutes(double value) {
@@ -635,6 +509,54 @@ class _DashboardHomeState extends State<_DashboardHome> {
     }
 
     return '${hours}س ${minutes}د';
+  }
+
+  Color get _scoreColor {
+    if (score >= 85) {
+      return green;
+    }
+
+    if (score >= 65) {
+      return teal;
+    }
+
+    if (score >= 40) {
+      return const Color(0xFFFFA62B);
+    }
+
+    return const Color(0xFFD95C5C);
+  }
+
+  String get _scoreTitle {
+    if (score >= 85) {
+      return 'عالی';
+    }
+
+    if (score >= 65) {
+      return 'خوب';
+    }
+
+    if (score >= 40) {
+      return 'نیازمند توجه';
+    }
+
+    return 'نیازمند استراحت';
+  }
+
+  String get _scoreDescription {
+    if (score >= 85) {
+      return 'امروز الگوی استفاده و وضعیت بدنت خوب بوده. همین روند را حفظ کن.';
+    }
+
+    if (score >= 65) {
+      return 'وضعیتت قابل قبول است، اما چند استراحت کوتاه می‌تواند امتیازت را بهتر کند.';
+    }
+
+    if (score >= 40) {
+      return 'بدنت امروز کمی بیشتر تحت فشار بوده. زمان بیشتری برای استراحت و اصلاح وضعیت در نظر بگیر.';
+    }
+
+    return 'امروز فشار زیادی روی بدنت بوده. چند دقیقه از صفحه فاصله بگیر و وضعیت بدنت را اصلاح کن.';
   }
 
   Widget _card({
@@ -662,49 +584,6 @@ class _DashboardHomeState extends State<_DashboardHome> {
     );
   }
 
-  Widget _metric(
-      String title,
-      String value,
-      IconData icon,
-      Color color,
-      ) {
-    return Expanded(
-      child: _card(
-        padding: const EdgeInsets.symmetric(
-          vertical: 13,
-          horizontal: 6,
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: color,
-              size: 19,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                color: text,
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: subtext,
-                fontSize: 9,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -721,22 +600,38 @@ class _DashboardHomeState extends State<_DashboardHome> {
         ),
         children: [
           _buildHeader(),
+
           const SizedBox(height: 14),
+
           _monitorCard(),
-          const SizedBox(height: 12),
-          _overview(),
-          const SizedBox(height: 12),
+
+          const SizedBox(height: 14),
+
+          _scoreCard(),
+
+          const SizedBox(height: 14),
+
           _buildMetrics(),
+
           const SizedBox(height: 14),
+
           _dailySupport(),
+
           const SizedBox(height: 14),
+
           _quickActions(),
+
           const SizedBox(height: 14),
+
           _recommendation(),
         ],
       ),
     );
   }
+
+  // ==========================================================================
+  // HEADER
+  // ==========================================================================
 
   Widget _buildHeader() {
     return Row(
@@ -766,8 +661,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
           ),
         ),
         Container(
-          width: 42,
-          height: 42,
+          width: 46,
+          height: 46,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -780,12 +675,377 @@ class _DashboardHomeState extends State<_DashboardHome> {
           child: const Icon(
             Icons.favorite_rounded,
             color: Colors.white,
-            size: 21,
+            size: 23,
           ),
         ),
       ],
     );
   }
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+
+    if (hour < 12) {
+      return 'صبح بخیر 👋';
+    }
+
+    if (hour < 18) {
+      return 'روز بخیر 👋';
+    }
+
+    return 'عصر بخیر 👋';
+  }
+
+  // ==========================================================================
+  // MONITOR
+  // ==========================================================================
+
+  Widget _monitorCard() {
+    final active =
+    widget.isMonitoringActive();
+
+    final gradientColors = active
+        ? const [
+      green,
+      teal,
+    ]
+        : const [
+      Color(0xFF9AA4AD),
+      Color(0xFF6E7983),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+        ),
+        borderRadius:
+        BorderRadius.circular(22),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(
+                alpha: 0.18,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              active
+                  ? Icons.radar_rounded
+                  : Icons.radar_outlined,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
+              children: [
+                Text(
+                  active
+                      ? 'پایش فعال است'
+                      : 'پایش فعال نیست',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight:
+                    FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  active
+                      ? 'سی در حال ثبت الگوهای سلامت توست.'
+                      : 'برای دریافت داده‌های سلامت، پایش را از بخش بدن فعال کن.',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 9,
+            height: 9,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // HEALTH SCORE
+  // ==========================================================================
+
+  Widget _scoreCard() {
+    final color = _scoreColor;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius:
+        BorderRadius.circular(24),
+        border: Border.all(
+          color: line,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 20,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'امتیاز سلامت امروز',
+                      style: TextStyle(
+                        color: text,
+                        fontSize: 16,
+                        fontWeight:
+                        FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      loading
+                          ? 'در حال دریافت داده‌ها...'
+                          : _scoreTitle,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight:
+                        FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(
+                    alpha: 0.10,
+                  ),
+                  borderRadius:
+                  BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$score / 100',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight:
+                    FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          Row(
+            crossAxisAlignment:
+            CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '$score',
+                          style: const TextStyle(
+                            color: text,
+                            fontSize: 52,
+                            height: 0.95,
+                            fontWeight:
+                            FontWeight.w900,
+                            letterSpacing: -2,
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        const Padding(
+                          padding:
+                          EdgeInsets.only(
+                            bottom: 5,
+                          ),
+                          child: Text(
+                            'از ۱۰۰',
+                            style: TextStyle(
+                              color: subtext,
+                              fontSize: 11,
+                              fontWeight:
+                              FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius:
+                      BorderRadius.circular(8),
+                      child:
+                      LinearProgressIndicator(
+                        value: score / 100,
+                        minHeight: 10,
+                        backgroundColor: mint,
+                        valueColor:
+                        AlwaysStoppedAnimation<
+                            Color>(
+                          color,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _scoreDescription,
+                      style: const TextStyle(
+                        color: subtext,
+                        fontSize: 10,
+                        height: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
+              Container(
+                width: 82,
+                height: 82,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin:
+                    Alignment.topLeft,
+                    end:
+                    Alignment.bottomRight,
+                    colors: [
+                      color,
+                      color.withValues(
+                        alpha: 0.72,
+                      ),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(
+                        alpha: 0.20,
+                      ),
+                      blurRadius: 18,
+                      offset:
+                      const Offset(0, 7),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisAlignment:
+                  MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.favorite_rounded,
+                      color: Colors.white,
+                      size: 19,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _scoreTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight:
+                        FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          Container(
+            padding:
+            const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAF9),
+              borderRadius:
+              BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.phone_android_rounded,
+                  color: teal,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'زمان صفحه امروز',
+                  style: TextStyle(
+                    color: subtext,
+                    fontSize: 10,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _minutes(
+                    today?.screenTime ?? 0,
+                  ),
+                  style: const TextStyle(
+                    color: text,
+                    fontSize: 12,
+                    fontWeight:
+                    FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // METRICS
+  // ==========================================================================
 
   Widget _buildMetrics() {
     return Row(
@@ -814,241 +1074,60 @@ class _DashboardHomeState extends State<_DashboardHome> {
     );
   }
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-
-    if (hour < 12) {
-      return 'صبح بخیر 👋';
-    }
-
-    if (hour < 18) {
-      return 'روز بخیر 👋';
-    }
-
-    return 'عصر بخیر 👋';
-  }
-
-  Widget _monitorCard() {
-    final active =
-    widget.isMonitoringActive();
-
-    final gradientColors = active
-        ? const [
-      green,
-      teal,
-    ]
-        : const [
-      Color(0xFF9AA4AD),
-      Color(0xFF6E7983),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-        ),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color:
-              Colors.white.withValues(alpha: 0.18),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              active
-                  ? Icons.radar_rounded
-                  : Icons.radar_outlined,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
-              children: [
-                Text(
-                  active
-                      ? 'پایش فعال است'
-                      : 'پایش فعال نیست',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  active
-                      ? 'سی در حال ثبت الگوهای سلامت توست.'
-                      : 'برای دریافت گزارش روزانه، پایش را فعال کن.',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: 9,
-            height: 9,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _overview() {
-    return _card(
-      child: LayoutBuilder(
-        builder: (
-            BuildContext context,
-            BoxConstraints constraints,
-            ) {
-          final compact =
-              constraints.maxWidth < 320;
-
-          final scoreView =
-          _buildScoreView(compact);
-
-          final copy = _buildScoreCopy();
-
-          if (compact) {
-            return Column(
-              children: [
-                scoreView,
-                const SizedBox(height: 12),
-                Align(
-                  alignment:
-                  Alignment.centerRight,
-                  child: copy,
-                ),
-              ],
-            );
-          }
-
-          return Row(
-            children: [
-              scoreView,
-              const SizedBox(width: 15),
-              copy,
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildScoreView(bool compact) {
-    final size = compact ? 74.0 : 88.0;
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CircularProgressIndicator(
-            value: score / 100,
-            strokeWidth: 8,
-            backgroundColor: mint,
-            valueColor:
-            const AlwaysStoppedAnimation<Color>(
-              green,
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$score',
-                style: const TextStyle(
-                  color: text,
-                  fontSize: 23,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const Text(
-                'امتیاز',
-                style: TextStyle(
-                  color: subtext,
-                  fontSize: 9,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScoreCopy() {
+  Widget _metric(
+      String title,
+      String value,
+      IconData icon,
+      Color color,
+      ) {
     return Expanded(
-      child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'وضعیت امروز',
-            style: TextStyle(
-              color: text,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
+      child: _card(
+        padding:
+        const EdgeInsets.symmetric(
+          vertical: 14,
+          horizontal: 6,
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: color,
+              size: 19,
             ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            loading
-                ? 'در حال دریافت داده‌ها...'
-                : _scoreMessage(),
-            style: const TextStyle(
-              color: subtext,
-              fontSize: 10,
-              height: 1.5,
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                color: text,
+                fontSize: 15,
+                fontWeight:
+                FontWeight.w900,
+              ),
             ),
-          ),
-          const SizedBox(height: 9),
-          Text(
-            'زمان صفحه: ${_minutes(today?.screenTime ?? 0)}',
-            style: const TextStyle(
-              color: teal,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
+            const SizedBox(height: 2),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: subtext,
+                fontSize: 9,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  String _scoreMessage() {
-    if (score >= 85) {
-      return 'عالیه؛ الگوی امروزت در وضعیت خوبی قرار دارد.';
-    }
-
-    if (score >= 65) {
-      return 'خوبه، اما چند استراحت کوتاه می‌تواند وضعیتت را بهتر کند.';
-    }
-
-    return 'امروز به وضعیت بدن و زمان استراحتت بیشتر توجه کن.';
-  }
+  // ==========================================================================
+  // DAILY SUPPORT
+  // ==========================================================================
 
   Widget _dailySupport() {
     return LayoutBuilder(
       builder: (
-          BuildContext context,
-          BoxConstraints constraints,
+          context,
+          constraints,
           ) {
         final stack =
             constraints.maxWidth < 390;
@@ -1075,13 +1154,9 @@ class _DashboardHomeState extends State<_DashboardHome> {
           crossAxisAlignment:
           CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: waterCard,
-            ),
+            Expanded(child: waterCard),
             const SizedBox(width: 10),
-            Expanded(
-              child: socialCard,
-            ),
+            Expanded(child: socialCard),
           ],
         );
       },
@@ -1106,7 +1181,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
               style: TextStyle(
                 color: text,
                 fontSize: 12,
-                fontWeight: FontWeight.w900,
+                fontWeight:
+                FontWeight.w900,
               ),
             ),
           ],
@@ -1117,7 +1193,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
           style: const TextStyle(
             color: text,
             fontSize: 15,
-            fontWeight: FontWeight.w900,
+            fontWeight:
+            FontWeight.w900,
           ),
         ),
         const SizedBox(height: 6),
@@ -1129,7 +1206,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
             minHeight: 5,
             backgroundColor: line,
             valueColor:
-            const AlwaysStoppedAnimation<Color>(
+            const AlwaysStoppedAnimation<
+                Color>(
               teal,
             ),
           ),
@@ -1140,9 +1218,11 @@ class _DashboardHomeState extends State<_DashboardHome> {
           child: OutlinedButton(
             onPressed:
             water >= 8 ? null : _addWater,
-            style: OutlinedButton.styleFrom(
+            style:
+            OutlinedButton.styleFrom(
               foregroundColor: teal,
-              side: const BorderSide(
+              side:
+              const BorderSide(
                 color: teal,
               ),
               padding:
@@ -1154,7 +1234,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
               '+ یک لیوان',
               style: TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
+                fontWeight:
+                FontWeight.w800,
               ),
             ),
           ),
@@ -1185,7 +1266,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
                 style: TextStyle(
                   color: text,
                   fontSize: 12,
-                  fontWeight: FontWeight.w900,
+                  fontWeight:
+                  FontWeight.w900,
                 ),
               ),
             ),
@@ -1233,7 +1315,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
         socialCheckIn == label;
 
     return InkWell(
-      onTap: () => _setSocialCheckIn(label),
+      onTap: () =>
+          _setSocialCheckIn(label),
       borderRadius:
       BorderRadius.circular(10),
       child: Container(
@@ -1250,28 +1333,36 @@ class _DashboardHomeState extends State<_DashboardHome> {
           BorderRadius.circular(10),
           border: Border.all(
             color: selected
-                ? green.withValues(alpha: 0.35)
+                ? green.withValues(
+              alpha: 0.35,
+            )
                 : line,
           ),
         ),
         child: Text(
           value,
           style: TextStyle(
-            color:
-            selected ? green : subtext,
+            color: selected
+                ? green
+                : subtext,
             fontSize: 9,
-            fontWeight: FontWeight.w800,
+            fontWeight:
+            FontWeight.w800,
           ),
         ),
       ),
     );
   }
 
+  // ==========================================================================
+  // QUICK ACTIONS
+  // ==========================================================================
+
   Widget _quickActions() {
     return LayoutBuilder(
       builder: (
-          BuildContext context,
-          BoxConstraints constraints,
+          context,
+          constraints,
           ) {
         if (constraints.maxWidth < 330) {
           return Column(
@@ -1352,7 +1443,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
                 style: const TextStyle(
                   color: text,
                   fontSize: 11,
-                  fontWeight: FontWeight.w900,
+                  fontWeight:
+                  FontWeight.w900,
                 ),
               ),
             ),
@@ -1367,8 +1459,12 @@ class _DashboardHomeState extends State<_DashboardHome> {
     );
   }
 
+  // ==========================================================================
+  // RECOMMENDATION
+  // ==========================================================================
+
   Widget _recommendation() {
-    final bool excellent = score >= 85;
+    final excellent = score >= 85;
 
     final title = excellent
         ? 'همین روند را حفظ کن'
@@ -1413,7 +1509,8 @@ class _DashboardHomeState extends State<_DashboardHome> {
                   style: const TextStyle(
                     color: text,
                     fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                    fontWeight:
+                    FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 4),
