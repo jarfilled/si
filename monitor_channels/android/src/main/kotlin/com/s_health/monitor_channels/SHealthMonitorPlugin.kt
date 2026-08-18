@@ -1,5 +1,6 @@
 package com.s_health.monitor_channels
 
+import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -7,10 +8,14 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-class SHealthMonitorPlugin : FlutterPlugin {
+class SHealthMonitorPlugin :
+    FlutterPlugin,
+    ActivityAware {
 
     companion object {
         private const val TAG = "SHealthPlugin"
@@ -54,6 +59,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
     }
 
     private var applicationContext: Context? = null
+    private var activity: Activity? = null
 
     private var lightEventChannel: EventChannel? = null
     private var distanceEventChannel: EventChannel? = null
@@ -82,6 +88,61 @@ class SHealthMonitorPlugin : FlutterPlugin {
         setupLightChannel(binding)
         setupHunchChannel(binding)
         setupMethodChannel(binding)
+    }
+
+    override fun onDetachedFromEngine(
+        binding: FlutterPlugin.FlutterPluginBinding,
+    ) {
+        unregisterDistanceReceiver()
+        unregisterPostureReceiver()
+        unregisterHunchReceiver()
+        unregisterLightReceiver()
+
+        distanceEventChannel?.setStreamHandler(null)
+        postureEventChannel?.setStreamHandler(null)
+        hunchEventChannel?.setStreamHandler(null)
+        lightEventChannel?.setStreamHandler(null)
+        cameraMethodChannel?.setMethodCallHandler(null)
+
+        distanceEventChannel = null
+        postureEventChannel = null
+        hunchEventChannel = null
+        lightEventChannel = null
+        cameraMethodChannel = null
+
+        distanceEventSink = null
+        postureEventSink = null
+        hunchEventSink = null
+        lightEventSink = null
+
+        activity = null
+        applicationContext = null
+    }
+
+    // ========================================================================
+    // ActivityAware
+    // ========================================================================
+
+    override fun onAttachedToActivity(
+        binding: ActivityPluginBinding,
+    ) {
+        activity = binding.activity
+        Log.d(TAG, "Attached to foreground Activity")
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(
+        binding: ActivityPluginBinding,
+    ) {
+        activity = binding.activity
+        Log.d(TAG, "Reattached to foreground Activity")
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
     }
 
     private fun setupDistanceChannel(
@@ -199,6 +260,18 @@ class SHealthMonitorPlugin : FlutterPlugin {
         cameraMethodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "startCamera" -> {
+                    // Camera FGS creation is deliberately UI-engine-only.
+                    // The background service isolate has no Activity and must
+                    // never be allowed to be the first caller of CameraService.
+                    if (activity == null) {
+                        result.error(
+                            "CAMERA_START_REQUIRES_FOREGROUND_UI",
+                            "CameraService must be started from the visible application UI.",
+                            null,
+                        )
+                        return@setMethodCallHandler
+                    }
+
                     val divisor =
                         readHunchDivisorFromCall(
                             call.arguments,
@@ -270,21 +343,12 @@ class SHealthMonitorPlugin : FlutterPlugin {
                 }
 
                 "getSavedHunchDivisor" -> {
-                    result.success(
-                        getSavedHunchDivisor(),
-                    )
+                    result.success(getSavedHunchDivisor())
                 }
 
                 "stopCamera" -> {
-                    Log.d(
-                        TAG,
-                        "Stopping camera",
-                    )
-
-                    stopCameraService(
-                        binding.applicationContext,
-                    )
-
+                    Log.d(TAG, "Stopping camera")
+                    stopCameraService(binding.applicationContext)
                     result.success("CameraStopped")
                 }
 
@@ -322,16 +386,13 @@ class SHealthMonitorPlugin : FlutterPlugin {
     private fun readHunchDivisorFromCall(
         arguments: Any?,
     ): Double? {
-        val args = arguments as? Map<*, *>
-            ?: return null
+        val args = arguments as? Map<*, *> ?: return null
 
-        val canonicalValue =
-            args[EXTRA_HUNCH_DIVISOR]
-        val legacyValue =
-            args["hunchDivisor"]
+        val canonicalValue = args[EXTRA_HUNCH_DIVISOR]
+        val legacyValue = args["hunchDivisor"]
 
         return when (
-            val value = canonicalValue ?: legacyValue
+            val value = canonicalValue ?: legacyValue,
         ) {
             is Number -> value.toDouble()
             is String -> value.toDoubleOrNull()
@@ -342,8 +403,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
     private fun saveHunchDivisor(
         divisor: Double,
     ) {
-        val context = applicationContext
-            ?: return
+        val context = applicationContext ?: return
 
         context
             .getSharedPreferences(
@@ -359,8 +419,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
     }
 
     private fun getSavedHunchDivisor(): Double? {
-        val context = applicationContext
-            ?: return null
+        val context = applicationContext ?: return null
 
         val prefs = context.getSharedPreferences(
             PREFS_NAME,
@@ -381,35 +440,6 @@ class SHealthMonitorPlugin : FlutterPlugin {
         return divisor.takeIf {
             it.isFinite() && it > 0.0
         }
-    }
-
-    override fun onDetachedFromEngine(
-        binding: FlutterPlugin.FlutterPluginBinding,
-    ) {
-        unregisterDistanceReceiver()
-        unregisterPostureReceiver()
-        unregisterHunchReceiver()
-        unregisterLightReceiver()
-
-        distanceEventChannel?.setStreamHandler(null)
-        postureEventChannel?.setStreamHandler(null)
-        hunchEventChannel?.setStreamHandler(null)
-        lightEventChannel?.setStreamHandler(null)
-
-        cameraMethodChannel?.setMethodCallHandler(null)
-
-        distanceEventChannel = null
-        postureEventChannel = null
-        hunchEventChannel = null
-        lightEventChannel = null
-        cameraMethodChannel = null
-
-        distanceEventSink = null
-        postureEventSink = null
-        hunchEventSink = null
-        lightEventSink = null
-
-        applicationContext = null
     }
 
     private fun registerDistanceReceiver() {
@@ -623,9 +653,7 @@ class SHealthMonitorPlugin : FlutterPlugin {
                 context,
                 "com.example.monitor.CameraService",
             )
-
             action = ACTION_START_CAMERA
-
             putExtra(
                 EXTRA_HUNCH_DIVISOR,
                 hunchDivisor,
@@ -649,9 +677,6 @@ class SHealthMonitorPlugin : FlutterPlugin {
             )
         }
 
-        // Stopping a service must not start a new service instance. Using
-        // startService() here could recreate CameraService solely to stop it,
-        // which was the source of a release-only ML Kit crash in the old flow.
         context.stopService(intent)
     }
 
@@ -663,7 +688,6 @@ class SHealthMonitorPlugin : FlutterPlugin {
                 context,
                 "com.example.monitor.AmbientLightService",
             )
-
             action = ACTION_START_LIGHT
         }
 
