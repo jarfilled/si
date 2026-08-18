@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -143,12 +144,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
       if (!value) {
         await prefs.setBool('monitoring_enabled', false);
-
-        // Stop the native camera from the visible UI isolate. This matters on
-        // Android 14+ because camera foreground services are tied to a
-        // while-in-use permission and background-service startup restrictions.
         await _stopNativeCamera();
-
         BackgroundMonitorService.stop();
 
         try {
@@ -165,7 +161,6 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         return;
       }
 
-      // Camera must be granted before CameraService is started.
       final monitoringPermissions =
           await AppPermissionManager.ensureMonitoringPermissions();
 
@@ -198,16 +193,9 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         return;
       }
 
-      await prefs.setDouble(
-        'hunch_divisor',
-        divisor,
-      );
+      await prefs.setDouble('hunch_divisor', divisor);
 
-      // Critical release-build change:
-      // start CameraService while this Activity is visible. The background
-      // isolate must not be the first caller that creates the camera FGS.
-      final cameraStarted =
-          await _startCameraForMonitoring(divisor);
+      final cameraStarted = await _startCameraForMonitoring(divisor);
 
       if (!cameraStarted) {
         _toast(
@@ -219,10 +207,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       await BackgroundMonitorService.initialize();
       BackgroundMonitorService.start();
 
-      await prefs.setBool(
-        'monitoring_enabled',
-        true,
-      );
+      await prefs.setBool('monitoring_enabled', true);
 
       if (mounted) {
         setState(() => monitoring = true);
@@ -259,14 +244,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           value == MonitoringMode.overlay ? 'overlay' : 'passive';
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'monitoring_mode',
-        modeString,
-      );
-
-      await BackgroundMonitorService.setMonitoringMode(
-        modeString,
-      );
+      await prefs.setString('monitoring_mode', modeString);
+      await BackgroundMonitorService.setMonitoringMode(modeString);
 
       if (mounted) {
         setState(() => mode = value);
@@ -289,9 +268,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     });
 
     try {
-      await BackgroundMonitorService.setMonitoringSoundEnabled(
-        value,
-      );
+      await BackgroundMonitorService.setMonitoringSoundEnabled(value);
     } catch (e, stackTrace) {
       debugPrint('[SettingsPage] Failed to change sound setting: $e');
       debugPrintStack(stackTrace: stackTrace);
@@ -315,8 +292,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
     try {
       if (value) {
-        final started =
-            await NSFWDetectionController().enable();
+        final started = await NSFWDetectionController().enable();
 
         if (!started) {
           permissionPending = true;
@@ -330,11 +306,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       }
 
       final prefs = await SharedPreferences.getInstance();
-
-      await prefs.setBool(
-        'nsfw_monitoring_enabled',
-        value,
-      );
+      await prefs.setBool('nsfw_monitoring_enabled', value);
 
       if (mounted) {
         setState(() => nsfw = value);
@@ -352,9 +324,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
   Future<void> _retryNsfw() async {
     try {
-      final granted =
-          await FlutterOverlayWindow.isPermissionGranted();
-
+      final granted = await FlutterOverlayWindow.isPermissionGranted();
       if (granted && !nsfw) {
         await _toggleNsfw(true);
       }
@@ -401,11 +371,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           color: mint,
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          icon,
-          color: color,
-          size: 20,
-        ),
+        child: Icon(icon, color: color, size: 20),
       );
 
   Widget _section(String title, String subtitle) => Padding(
@@ -424,10 +390,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
             const SizedBox(height: 3),
             Text(
               subtitle,
-              style: const TextStyle(
-                color: sub,
-                fontSize: 10,
-              ),
+              style: const TextStyle(color: sub, fontSize: 10),
             ),
           ],
         ),
@@ -451,17 +414,11 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           decoration: BoxDecoration(
             color: selected ? mint : bg,
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: selected ? green : line,
-            ),
+            border: Border.all(color: selected ? green : line),
           ),
           child: Row(
             children: [
-              Icon(
-                icon,
-                color: selected ? green : sub,
-                size: 18,
-              ),
+              Icon(icon, color: selected ? green : sub, size: 18),
               const SizedBox(width: 7),
               Expanded(
                 child: Column(
@@ -478,10 +435,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        color: sub,
-                        fontSize: 8,
-                      ),
+                      style: const TextStyle(color: sub, fontSize: 8),
                     ),
                   ],
                 ),
@@ -528,10 +482,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_left_rounded,
-              color: sub,
-            ),
+            const Icon(Icons.chevron_left_rounded, color: sub),
           ],
         ),
       );
@@ -545,17 +496,10 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         body: SafeArea(
           child: loading
               ? const Center(
-                  child: CircularProgressIndicator(
-                    color: green,
-                  ),
+                  child: CircularProgressIndicator(color: green),
                 )
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    18,
-                    10,
-                    18,
-                    30,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
                   children: [
                     Row(
                       children: [
@@ -589,15 +533,11 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                         children: [
                           Row(
                             children: [
-                              _icon(
-                                Icons.monitor_heart_outlined,
-                                green,
-                              ),
+                              _icon(Icons.monitor_heart_outlined, green),
                               const SizedBox(width: 11),
                               const Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'پایش وضعیت بدن',
@@ -610,32 +550,23 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                                     SizedBox(height: 4),
                                     Text(
                                       'گردن، قوز، مچ، فاصله و نور محیط',
-                                      style: TextStyle(
-                                        color: sub,
-                                        fontSize: 10,
-                                      ),
+                                      style: TextStyle(color: sub, fontSize: 10),
                                     ),
                                   ],
                                 ),
                               ),
                               Switch.adaptive(
                                 value: monitoring,
-                                onChanged: busyMonitoring
-                                    ? null
-                                    : _toggleMonitoring,
+                                onChanged:
+                                    busyMonitoring ? null : _toggleMonitoring,
                                 activeColor: green,
                               ),
                             ],
                           ),
                           if (monitoring) ...[
                             const Padding(
-                              padding: EdgeInsets.symmetric(
-                                vertical: 15,
-                              ),
-                              child: Divider(
-                                color: line,
-                                height: 1,
-                              ),
+                              padding: EdgeInsets.symmetric(vertical: 15),
+                              child: Divider(color: line, height: 1),
                             ),
                             const Align(
                               alignment: Alignment.centerRight,
@@ -667,13 +598,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                               ],
                             ),
                             const Padding(
-                              padding: EdgeInsets.symmetric(
-                                vertical: 15,
-                              ),
-                              child: Divider(
-                                color: line,
-                                height: 1,
-                              ),
+                              padding: EdgeInsets.symmetric(vertical: 15),
+                              child: Divider(color: line, height: 1),
                             ),
                             Row(
                               children: [
@@ -686,8 +612,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                                 const SizedBox(width: 11),
                                 const Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'صدای هشدار',
@@ -745,15 +670,11 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                     _card(
                       Row(
                         children: [
-                          _icon(
-                            Icons.shield_outlined,
-                            teal,
-                          ),
+                          _icon(Icons.shield_outlined, teal),
                           const SizedBox(width: 11),
                           const Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'پایش محتوای نامناسب',
@@ -796,12 +717,9 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                             'برای پایش گردن، قوز و فاصله',
                             () async {
                               final granted =
-                                  await AppPermissionManager
-                                      .ensureMonitoringPermissions();
+                                  await AppPermissionManager.ensureMonitoringPermissions();
                               if (!granted) {
-                                _toast(
-                                  'اجازه دوربین داده نشده است.',
-                                );
+                                _toast('اجازه دوربین داده نشده است.');
                               }
                             },
                           ),
@@ -812,8 +730,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                             'برای هشدارهای شناور',
                             () async {
                               final granted =
-                                  await AppPermissionManager
-                                      .ensureOverlayPermission();
+                                  await AppPermissionManager.ensureOverlayPermission();
                               if (!granted) {
                                 _toast(
                                   'اجازه نمایش روی سایر برنامه‌ها داده نشده است.',
@@ -827,8 +744,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                             'مجوز اعلان‌ها',
                             'برای اعلان سرویس پایش',
                             () async {
-                              await AppPermissionManager
-                                  .ensureMonitoringPermissions();
+                              await AppPermissionManager.ensureMonitoringPermissions();
                             },
                           ),
                           const Divider(height: 24, color: line),
