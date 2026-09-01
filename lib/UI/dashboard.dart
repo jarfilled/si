@@ -227,13 +227,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   Widget _buildBottomNavigationBar() {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+
     return Container(
       color: bg,
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         14,
         6,
         14,
-        12,
+        12 + bottomInset,
       ),
       child: Container(
         height: 68,
@@ -252,31 +254,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           children: List.generate(
             navItems.length,
                 (index) {
-              final selected =
-                  index == currentIndex;
-
+              final selected = index == currentIndex;
               final item = navItems[index];
 
               return Expanded(
                 child: InkWell(
-                  key: ValueKey<String>('tour-nav-${item.label}'),
                   onTap: () => _goTo(index),
-                  borderRadius:
-                  BorderRadius.circular(17),
+                  borderRadius: BorderRadius.circular(17),
                   child: AnimatedContainer(
-                    duration:
-                    const Duration(milliseconds: 180),
+                    duration: const Duration(
+                      milliseconds: 180,
+                    ),
                     margin: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: selected
                           ? green.withValues(alpha: 0.12)
                           : Colors.transparent,
-                      borderRadius:
-                      BorderRadius.circular(17),
+                      borderRadius: BorderRadius.circular(17),
                     ),
                     child: Column(
-                      mainAxisAlignment:
-                      MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           item.icon,
