@@ -259,6 +259,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
               return Expanded(
                 child: InkWell(
+                  key: ValueKey<String>('tour-nav-${item.label}'),
                   onTap: () => _goTo(index),
                   borderRadius: BorderRadius.circular(17),
                   child: AnimatedContainer(

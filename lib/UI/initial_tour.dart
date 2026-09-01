@@ -247,6 +247,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
       if (profileState != null) {
         await profileState.ensureTourSettingsVisible();
       }
+      await WidgetsBinding.instance.endOfFrame;
     }
 
     setState(() {
