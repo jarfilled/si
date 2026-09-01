@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'calibration_screen.dart';
 import 'dashboard.dart';
+import 'profile_page.dart';
 
 class InitialTourPage extends StatefulWidget {
   final String userGender;
@@ -237,6 +238,17 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
   Future<void> _prepareStep() async {
     if (!mounted) return;
+
+    // The settings action is below the initial profile viewport. Because the
+    // profile uses a lazy ListView, its row may not exist in the element tree
+    // until we scroll. Put it on-screen before looking up the spotlight.
+    if (_index == _steps.length - 1) {
+      final profileState = ProfilePage.tourKey.currentState;
+      if (profileState != null) {
+        await profileState.ensureTourSettingsVisible();
+      }
+    }
+
     setState(() {
       _targetRect = null;
       _targetElement = null;

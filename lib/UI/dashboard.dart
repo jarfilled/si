@@ -85,7 +85,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
 
     pages.add(
-      const ProfilePage(),
+      ProfilePage(key: ProfilePage.tourKey),
     );
 
     navItems.add(

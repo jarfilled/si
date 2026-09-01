@@ -12,13 +12,16 @@ import 'exercise_center_page.dart';
 import 'settings_page.dart';
 
 class ProfilePage extends StatefulWidget {
+  static final GlobalKey<ProfilePageState> tourKey = GlobalKey<ProfilePageState>();
   const ProfilePage({super.key});
 
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  State<ProfilePage> createState() => ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class ProfilePageState extends State<ProfilePage> {
+  final ScrollController _tourScrollController = ScrollController();
+  final GlobalKey _tourSettingsRowKey = GlobalKey();
   static const bg = Color(0xFFF4F9F7);
   static const card = Colors.white;
   static const green = Color(0xFF42D2A7);
@@ -920,7 +923,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _tourSettingsAction() {
     return InkWell(
-      key: const ValueKey<String>('tour-settings-entry'),
+      key: _tourSettingsRowKey,
       onTap: _openSettings,
       borderRadius: BorderRadius.circular(15),
       child: Row(
@@ -946,6 +949,16 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     );
+  }
+
+  Future<void> ensureTourSettingsVisible() async {
+    if (!_tourScrollController.hasClients) return;
+    await _tourScrollController.animateTo(
+      _tourScrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+    await WidgetsBinding.instance.endOfFrame;
   }
 
   Widget _action(
@@ -1037,6 +1050,7 @@ class _ProfilePageState extends State<ProfilePage> {
             color: green,
             onRefresh: _load,
             child: ListView(
+              controller: _tourScrollController,
               physics:
               const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(
@@ -1253,6 +1267,7 @@ class _EditProfileDialogState
 
   @override
   void dispose() {
+    _tourScrollController.dispose();
     _nameController.dispose();
     _usernameController.dispose();
     _birthController.dispose();
