@@ -1,10 +1,12 @@
 name: Fix tour targets
 on:
-  workflow_dispatch:
+  push:
+    branches: [ui-overhaul-2026-08]
 permissions:
   contents: write
 jobs:
   patch:
+    if: "!contains(github.event.head_commit.message, 'Fix initial tour profile and settings targets') && !contains(github.event.head_commit.message, 'Remove temporary tour fix workflow')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +37,7 @@ jobs:
               raise SystemExit('profile settings action block not found')
           text = text.replace(old, new, 1)
           marker = """  Widget _action(\n      IconData icon,\n"""
-          helper = """  Widget _tourSettingsAction() {\n    return InkWell(\n      key: const ValueKey<String>('tour-settings-entry'),\n      onTap: _openSettings,\n      borderRadius: BorderRadius.circular(15),\n      child: Row(\n        children: [\n          Container(\n            width: 42,\n            height: 42,\n            decoration: const BoxDecoration(\n              color: mint,\n              shape: BoxShape.circle,\n            ),\n            child: const Icon(\n              Icons.settings_outlined,\n              color: green,\n            ),\n          ),\n          const SizedBox(width: 12),\n          const Expanded(\n            child: Column(\n              crossAxisAlignment: CrossAxisAlignment.start,\n              children: [\n                Text(\n                  'تنظیمات پایش',\n                  style: TextStyle(\n                    color: text,\n                    fontSize: 13,\n                    fontWeight: FontWeight.w900,\n                  ),\n                ),\n                SizedBox(height: 3),\n                Text(\n                  'دوربین، هشدارها و محافظت از محتوا',\n                  maxLines: 1,\n                  overflow: TextOverflow.ellipsis,\n                  style: TextStyle(\n                    color: subtext,\n                    fontSize: 10,\n                  ),\n                ),\n              ],\n            ),\n          ),\n          const Icon(\n            Icons.chevron_left_rounded,\n            color: subtext,\n          ),\n        ],\n      ),\n    );\n  }\n\n"""
+          helper = """  Widget _tourSettingsAction() {\n    return InkWell(\n      key: const ValueKey<String>('tour-settings-entry'),\n      onTap: _openSettings,\n      borderRadius: BorderRadius.circular(15),\n      child: Row(\n        children: [\n          Container(\n            width: 42,\n            height: 42,\n            decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),\n            child: const Icon(Icons.settings_outlined, color: green),\n          ),\n          const SizedBox(width: 12),\n          const Expanded(\n            child: Column(\n              crossAxisAlignment: CrossAxisAlignment.start,\n              children: [\n                Text('تنظیمات پایش', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)),\n                SizedBox(height: 3),\n                Text('دوربین، هشدارها و محافظت از محتوا', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: subtext, fontSize: 10)),\n              ],\n            ),\n          ),\n          const Icon(Icons.chevron_left_rounded, color: subtext),\n        ],\n      ),\n    );\n  }\n\n"""
           if marker not in text:
               raise SystemExit('profile action marker not found')
           text = text.replace(marker, helper + marker, 1)
@@ -43,38 +45,23 @@ jobs:
 
           tour = Path('lib/UI/initial_tour.dart')
           text = tour.read_text(encoding='utf-8')
-
           text = text.replace("  final bool settingsEntry;\n", "  final bool settingsEntry;\n  final String? keyTarget;\n", 1)
           text = text.replace("    this.settingsEntry = false,\n", "    this.settingsEntry = false,\n    this.keyTarget,\n", 1)
-
-          text = text.replace(
-              "        textTarget: 'بدن',\n",
-              "        keyTarget: 'tour-nav-بدن',\n", 1)
-          text = text.replace(
-              "        textTarget: 'ورزش',\n",
-              "        keyTarget: 'tour-nav-ورزش',\n", 1)
-          text = text.replace(
-              "          textTarget: 'بانوان',\n",
-              "          keyTarget: 'tour-nav-بانوان',\n", 1)
-          text = text.replace(
-              "        textTarget: 'پروفایل',\n",
-              "        keyTarget: 'tour-nav-پروفایل',\n", 1)
-          text = text.replace(
-              "        textTarget: 'تنظیمات پایش',\n",
-              "        keyTarget: 'tour-settings-entry',\n", 1)
-
+          text = text.replace("        textTarget: 'بدن',\n", "        keyTarget: 'tour-nav-بدن',\n", 1)
+          text = text.replace("        textTarget: 'ورزش',\n", "        keyTarget: 'tour-nav-ورزش',\n", 1)
+          text = text.replace("          textTarget: 'بانوان',\n", "          keyTarget: 'tour-nav-بانوان',\n", 1)
+          text = text.replace("        textTarget: 'پروفایل',\n", "        keyTarget: 'tour-nav-پروفایل',\n", 1)
+          text = text.replace("        textTarget: 'تنظیمات پایش',\n", "        keyTarget: 'tour-settings-entry',\n", 1)
           old = """    Element? element;\n    if (step.iconTarget != null) {\n      element = _findIconElement(step.iconTarget!);\n    } else if (step.textTarget != null) {\n      element = _findTextElement(step.textTarget!, prefix: step.textPrefix);\n    }\n"""
           new = """    Element? element;\n    if (step.keyTarget != null) {\n      element = _findElementByKey(step.keyTarget!);\n    } else if (step.iconTarget != null) {\n      element = _findIconElement(step.iconTarget!);\n    } else if (step.textTarget != null) {\n      element = _findTextElement(step.textTarget!, prefix: step.textPrefix);\n    }\n"""
           if old not in text:
               raise SystemExit('tour target resolution block not found')
           text = text.replace(old, new, 1)
-
           marker = """  Element? _findTextElement(String target, {String? prefix}) {\n"""
-          helper = """  Element? _findElementByKey(String value) {\n    Element? found;\n\n    void visit(Element element) {\n      if (found != null) return;\n      final key = element.widget.key;\n      if (key is ValueKey<String> && key.value == value) {\n        found = element;\n        return;\n      }\n      element.visitChildElements(visit);\n    }\n\n    widget.hostContext.visitChildElements(visit);\n    return found;\n  }\n\n"""
+          helper = """  Element? _findElementByKey(String value) {\n    Element? found;\n    void visit(Element element) {\n      if (found != null) return;\n      final key = element.widget.key;\n      if (key is ValueKey<String> && key.value == value) {\n        found = element;\n        return;\n      }\n      element.visitChildElements(visit);\n    }\n    widget.hostContext.visitChildElements(visit);\n    return found;\n  }\n\n"""
           if marker not in text:
               raise SystemExit('tour text finder marker not found')
           text = text.replace(marker, helper + marker, 1)
-
           tour.write_text(text, encoding='utf-8')
           PY
 
