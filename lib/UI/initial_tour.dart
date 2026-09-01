@@ -1,202 +1,239 @@
+import 'dart:math' as math;
+
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'calibration_screen.dart';
+import 'dashboard.dart';
+import 'settings_page.dart';
+
+class InitialTourPage extends StatefulWidget {
+  final String userGender;
+  final bool needsCalibration;
+
+  const InitialTourPage({
+    super.key,
+    required this.userGender,
+    required this.needsCalibration,
+  });
+
+  @override
+  State<InitialTourPage> createState() => _InitialTourPageState();
+}
+
+class _InitialTourPageState extends State<InitialTourPage> {
+  bool _ready = false;
+  bool _completed = false;
+  OverlayEntry? _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepare();
+  }
+
+  Future<void> _prepare() async {
+    final completed = await InitialTour.hasCompleted();
+
+    if (!mounted) return;
+
+    setState(() {
+      _ready = true;
+      _completed = completed;
+    });
+
+    if (completed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _goToDestination();
+      });
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(
+        const Duration(milliseconds: 350),
+      );
+
+      if (mounted) {
+        _showTour();
+      }
+    });
+  }
+
+  void _showTour() {
+    if (!mounted || _entry != null) return;
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (_) => _InitialTourOverlay(
+        userGender: widget.userGender,
+        onFinished: () async {
+          await InitialTour.markCompleted();
+
+          try {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          } catch (_) {}
+
+          entry.remove();
+          _entry = null;
+
+          if (mounted) {
+            await _goToDestination();
+          }
+        },
+        onSkipped: () async {
+          await InitialTour.markCompleted();
+
+          try {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          } catch (_) {}
+
+          entry.remove();
+          _entry = null;
+
+          if (mounted) {
+            await _goToDestination();
+          }
+        },
+      ),
+    );
+
+    _entry = entry;
+    overlay.insert(entry);
+  }
+
+  Future<void> _goToDestination() async {
+    if (!mounted) return;
+
+    if (widget.needsCalibration) {
+      try {
+        final cameras = await availableCameras();
+
+        if (!mounted) return;
+
+        if (cameras.isNotEmpty) {
+          await Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CalibrationScreen(
+                cameras: cameras,
+              ),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint(
+          '[InitialTour] Failed to open calibration: $e',
+        );
+      }
+    }
+
+    if (!mounted) return;
+
+    await Navigator.pushReplacementNamed(
+      context,
+      '/dashboard',
+      arguments: widget.userGender,
+    );
+  }
+
+  @override
+  void dispose() {
+    _entry?.remove();
+    _entry = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF4F9F7),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF42D2A7),
+          ),
+        ),
+      );
+    }
+
+    if (_completed) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF4F9F7),
+      );
+    }
+
+    return MainNavigationScreen(
+      userGender: widget.userGender,
+    );
+  }
+}
+
 class InitialTour {
-  static const String completionKey = 'initial_app_tour_completed';
+  static const String completionKey =
+      'initial_app_tour_completed';
 
   static Future<bool> hasCompleted() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(completionKey) ?? false;
   }
 
+  static Future<void> markCompleted() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(completionKey, true);
+  }
+
   static Future<void> reset() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(completionKey);
   }
+}
 
-  static Future<void> maybeStart({
-    required BuildContext context,
-    required List<GlobalKey> navigationKeys,
-    required GlobalKey dashboardScoreKey,
-    required GlobalKey monitoringKey,
-    required bool isFemale,
-    required ValueChanged<int> onNavigate,
-    required Future<void> Function() onOpenSettings,
-    required Future<void> Function() onCloseSettings,
-  }) async {
-    final completed = await hasCompleted();
+class _InitialTourOverlay extends StatefulWidget {
+  final String userGender;
+  final Future<void> Function() onFinished;
+  final Future<void> Function() onSkipped;
 
-    if (completed || !context.mounted) {
-      return;
-    }
+  const _InitialTourOverlay({
+    required this.userGender,
+    required this.onFinished,
+    required this.onSkipped,
+  });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!context.mounted) return;
-
-      await Future<void>.delayed(
-        const Duration(milliseconds: 350),
-      );
-
-      if (!context.mounted) return;
-
-      _show(
-        context: context,
-        navigationKeys: navigationKeys,
-        dashboardScoreKey: dashboardScoreKey,
-        monitoringKey: monitoringKey,
-        isFemale: isFemale,
-        onNavigate: onNavigate,
-        onOpenSettings: onOpenSettings,
-        onCloseSettings: onCloseSettings,
-      );
-    });
-  }
-
-  static void _show({
-    required BuildContext context,
-    required List<GlobalKey> navigationKeys,
-    required GlobalKey dashboardScoreKey,
-    required GlobalKey monitoringKey,
-    required bool isFemale,
-    required ValueChanged<int> onNavigate,
-    required Future<void> Function() onOpenSettings,
-    required Future<void> Function() onCloseSettings,
-  }) {
-    final overlay = Overlay.of(context, rootOverlay: true);
-
-    final steps = <_TourStep>[
-      _TourStep(
-        title: 'مرکز سلامت تو',
-        message:
-            'اینجا وضعیت کلی سلامتت، امتیاز روزانه و مهم‌ترین اطلاعات امروز را یکجا می‌بینی.',
-        targetKey: dashboardScoreKey,
-      ),
-      _TourStep(
-        title: 'پایش بدن',
-        message:
-            'سی می‌تواند گردن، قوز، مچ، فاصله از صفحه و نور محیط را در پس‌زمینه بررسی و ثبت کند.',
-        targetKey: monitoringKey,
-      ),
-      _TourStep(
-        title: 'تحلیل وضعیت بدن',
-        message:
-            'در بخش «بدن» جزئیات هشدارها، روند روزهای اخیر و وضعیت هر بخش را بررسی کن.',
-        targetKey: navigationKeys[1],
-        beforeShow: () async => onNavigate(1),
-      ),
-      _TourStep(
-        title: 'تمرین و حرکت',
-        message:
-            'از بخش «ورزش» برای تمرین‌های کوتاه و حرکات مناسب استفاده کن.',
-        targetKey: navigationKeys[2],
-        beforeShow: () async => onNavigate(2),
-      ),
-    ];
-
-    if (isFemale && navigationKeys.length >= 5) {
-      steps.add(
-        _TourStep(
-          title: 'سلامت و قاعدگی',
-          message:
-              'بخش «بانوان» برای ثبت علائم روزانه، پیگیری چرخه و مشاهده روند علائم طراحی شده است.',
-          targetKey: navigationKeys[3],
-          beforeShow: () async => onNavigate(3),
-        ),
-      );
-    }
-
-    final profileIndex = navigationKeys.length - 1;
-
-    steps.add(
-      _TourStep(
-        title: 'پروفایل',
-        message:
-            'پروفایل یکی از مهم‌ترین بخش‌های برنامه است؛ اطلاعات حساب، مشخصات شخصی، کالیبراسیون و گزینه‌های حساب را از اینجا مدیریت می‌کنی.',
-        targetKey: navigationKeys[profileIndex],
-        beforeShow: () async => onNavigate(profileIndex),
-      ),
-    );
-
-    steps.add(
-      _TourStep(
-        title: 'تنظیمات',
-        message:
-            'در تنظیمات کنترل‌های اصلی برنامه قرار دارند: پایش پس‌زمینه، حالت هشدار شناور، صداهای هشدار و صداهای اختصاصی، محافظت دیجیتال و مجوزها. این بخش را هر زمان خواستی می‌توانی دوباره بررسی کنی.',
-        beforeShow: onOpenSettings,
-        closeAfter: true,
-      ),
-    );
-
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (_) => _InitialTourOverlay(
-        steps: steps,
-        onFinish: () async {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool(completionKey, true);
-
-          final needsClose = steps.isNotEmpty && steps.last.closeAfter;
-
-          if (needsClose) {
-            try {
-              await onCloseSettings();
-            } catch (_) {}
-          }
-
-          entry.remove();
-        },
-        onSkip: () async {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool(completionKey, true);
-
-          final currentStepIsSettings =
-              steps.isNotEmpty && steps.last.closeAfter;
-
-          if (currentStepIsSettings) {
-            try {
-              await onCloseSettings();
-            } catch (_) {}
-          }
-
-          entry.remove();
-        },
-      ),
-    );
-
-    overlay.insert(entry);
-  }
+  @override
+  State<_InitialTourOverlay> createState() => _InitialTourOverlayState();
 }
 
 class _TourStep {
   final String title;
   final String message;
-  final GlobalKey? targetKey;
-  final Future<void> Function()? beforeShow;
-  final bool closeAfter;
+  final _TourTarget target;
+  final int? navigationIndex;
+  final bool openSettings;
 
   const _TourStep({
     required this.title,
     required this.message,
-    this.targetKey,
-    this.beforeShow,
-    this.closeAfter = false,
+    required this.target,
+    this.navigationIndex,
+    this.openSettings = false,
   });
 }
 
-class _InitialTourOverlay extends StatefulWidget {
-  final List<_TourStep> steps;
-  final Future<void> Function() onFinish;
-  final Future<void> Function() onSkip;
-
-  const _InitialTourOverlay({
-    required this.steps,
-    required this.onFinish,
-    required this.onSkip,
-  });
-
-  @override
-  State<_InitialTourOverlay> createState() => _InitialTourOverlayState();
+enum _TourTarget {
+  dashboardSummary,
+  monitoring,
+  navigation,
+  settings,
 }
 
 class _InitialTourOverlayState extends State<_InitialTourOverlay> {
@@ -205,21 +242,86 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   static const text = Color(0xFF263B37);
   static const subtext = Color(0xFF7D8D89);
 
-  int index = 0;
-  Rect? targetRect;
-  bool busy = false;
+  late final List<_TourStep> _steps;
+
+  int _index = 0;
+  Rect? _targetRect;
+  bool _busy = false;
+  bool _settingsOpened = false;
 
   @override
   void initState() {
     super.initState();
-    _prepareStep();
+
+    final female = widget.userGender == 'female';
+
+    _steps = [
+      const _TourStep(
+        title: 'مرکز سلامت تو',
+        message:
+            'اینجا خلاصه وضعیت روزانه، امتیاز سلامت و اطلاعات مهم مربوط به استفاده از گوشی را می‌بینی. این صفحه نقطه شروع اصلی سی است.',
+        target: _TourTarget.dashboardSummary,
+      ),
+      const _TourStep(
+        title: 'پایش بدن',
+        message:
+            'سی می‌تواند گردن، قوز، مچ دست، فاصله از صفحه و نور محیط را در پس‌زمینه بررسی و ثبت کند. وضعیت فعال بودن پایش را از این قسمت متوجه می‌شوی.',
+        target: _TourTarget.monitoring,
+      ),
+      const _TourStep(
+        title: 'تحلیل وضعیت بدن',
+        message:
+            'برای دیدن جزئیات هشدارها و روند وضعیت بدنی، تب «بدن» را انتخاب کن.',
+        target: _TourTarget.navigation,
+        navigationIndex: 1,
+      ),
+      const _TourStep(
+        title: 'تمرین و حرکت',
+        message:
+            'در «ورزش» می‌توانی تمرین‌های کوتاه و حرکات مناسب را پیدا کنی. هر زمان احساس خستگی یا فشار کردی، این بخش را به یاد داشته باش.',
+        target: _TourTarget.navigation,
+        navigationIndex: 2,
+      ),
+      if (female)
+        const _TourStep(
+          title: 'سلامت و قاعدگی',
+          message:
+              'بخش «بانوان» برای ثبت چرخه، علائم روزانه و مشاهده روند تغییرات طراحی شده است.',
+          target: _TourTarget.navigation,
+          navigationIndex: 3,
+        ),
+      _TourStep(
+        title: 'پروفایل',
+        message:
+            'پروفایل یکی از مهم‌ترین بخش‌های برنامه است. اطلاعات حساب، مشخصات شخصی، وضعیت کالیبراسیون و گزینه‌های مرتبط با حساب کاربری را از اینجا مدیریت می‌کنی.',
+        target: _TourTarget.navigation,
+        navigationIndex: female ? 4 : 3,
+      ),
+      const _TourStep(
+        title: 'تنظیمات',
+        message:
+            'در تنظیمات کنترل‌های اصلی سی قرار دارند: پایش پس‌زمینه، حالت هشدار شناور، صدای هشدارها و صداهای اختصاصی، محافظت دیجیتال و مجوزها. این صفحه را باز کرده‌ایم تا جای آن را هم بشناسی.',
+        target: _TourTarget.settings,
+        openSettings: true,
+      ),
+    ];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _prepareStep();
+    });
   }
 
   Future<void> _prepareStep() async {
-    final step = widget.steps[index];
+    final step = _steps[_index];
 
-    if (step.beforeShow != null) {
-      await step.beforeShow!();
+    if (step.openSettings && !_settingsOpened) {
+      _settingsOpened = true;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const SettingsPage(),
+        ),
+      );
     }
 
     if (!mounted) return;
@@ -231,69 +333,124 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     if (!mounted) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _updateTargetRect();
+      if (mounted) {
+        _calculateTarget();
+      }
     });
   }
 
-  void _updateTargetRect() {
-    final key = widget.steps[index].targetKey;
+  void _calculateTarget() {
+    final size = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.viewPaddingOf(context);
+    final step = _steps[_index];
 
-    if (key == null || key.currentContext == null) {
-      if (targetRect != null) {
-        setState(() => targetRect = null);
-      }
-      return;
+    Rect rect;
+
+    switch (step.target) {
+      case _TourTarget.dashboardSummary:
+        rect = Rect.fromLTWH(
+          16,
+          padding.top + 140,
+          size.width - 32,
+          math.min(255, size.height * 0.34),
+        );
+        break;
+
+      case _TourTarget.monitoring:
+        rect = Rect.fromLTWH(
+          16,
+          padding.top + 67,
+          size.width - 32,
+          95,
+        );
+        break;
+
+      case _TourTarget.navigation:
+        rect = _navigationTarget(
+          size,
+          padding,
+          step.navigationIndex ?? 0,
+        );
+        break;
+
+      case _TourTarget.settings:
+        rect = Rect.fromLTWH(
+          16,
+          padding.top + 76,
+          size.width - 32,
+          math.min(190, size.height * 0.27),
+        );
+        break;
     }
 
-    final renderObject = key.currentContext!.findRenderObject();
-
-    if (renderObject is! RenderBox || !renderObject.hasSize) {
-      return;
-    }
-
-    final rect = renderObject.localToGlobal(Offset.zero) &
-        renderObject.size;
-
-    if (rect != targetRect) {
-      setState(() => targetRect = rect);
+    if (_targetRect != rect) {
+      setState(() {
+        _targetRect = rect;
+      });
     }
   }
 
-  Future<void> _next() async {
-    if (busy) return;
+  Rect _navigationTarget(
+    Size size,
+    EdgeInsets padding,
+    int index,
+  ) {
+    const horizontal = 14.0;
+    const bottomPadding = 12.0;
+    const barHeight = 68.0;
 
-    setState(() => busy = true);
+    final count = widget.userGender == 'female' ? 5 : 4;
+    final availableWidth =
+        size.width - (horizontal * 2);
+    final itemWidth = availableWidth / count;
+
+    final bottom = math.max(
+      padding.bottom + bottomPadding,
+      12,
+    );
+
+    return Rect.fromLTWH(
+      horizontal + itemWidth * index + 3,
+      size.height - bottom - barHeight - 3,
+      itemWidth - 6,
+      barHeight,
+    );
+  }
+
+  Future<void> _next() async {
+    if (_busy) return;
+
+    setState(() => _busy = true);
 
     try {
-      if (index >= widget.steps.length - 1) {
-        await widget.onFinish();
+      if (_index == _steps.length - 1) {
+        await widget.onFinished();
         return;
       }
 
       setState(() {
-        index += 1;
-        targetRect = null;
+        _index += 1;
+        _targetRect = null;
       });
 
       await _prepareStep();
     } finally {
       if (mounted) {
-        setState(() => busy = false);
+        setState(() => _busy = false);
       }
     }
   }
 
   Future<void> _skip() async {
-    if (busy) return;
+    if (_busy) return;
 
-    setState(() => busy = true);
+    setState(() => _busy = true);
 
     try {
-      await widget.onSkip();
+      await widget.onSkipped();
     } finally {
       if (mounted) {
-        setState(() => busy = false);
+        setState(() => _busy = false);
       }
     }
   }
@@ -301,178 +458,189 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final step = widget.steps[index];
+    final step = _steps[_index];
 
     return Material(
       type: MaterialType.transparency,
       child: Stack(
         children: [
           Positioned.fill(
-            child: CustomPaint(
-              painter: _SpotlightPainter(
-                targetRect: targetRect,
+            child: IgnorePointer(
+              child: CustomPaint(
+                painter: _TourSpotlightPainter(
+                  targetRect: _targetRect,
+                ),
               ),
             ),
           ),
-          _buildHintCard(size, step),
+          _buildHint(size, step),
         ],
       ),
     );
   }
 
-  Widget _buildHintCard(
-    Size size,
-    _TourStep step,
-  ) {
-    const horizontalMargin = 18.0;
-    const cardWidth = 340.0;
-
-    final width = size.width < cardWidth + 36
-        ? size.width - 36
-        : cardWidth;
+  Widget _buildHint(Size size, _TourStep step) {
+    final width = math.min(340.0, size.width - 32);
 
     double top;
 
-    if (targetRect == null) {
+    if (_targetRect == null) {
       top = (size.height - 190) / 2;
+    } else if (_targetRect!.top > size.height * 0.55) {
+      top = (_targetRect!.top - 205).clamp(
+        20.0,
+        size.height - 185,
+      );
     } else {
-      final below = targetRect!.bottom + 18;
-      final above = targetRect!.top - 170;
-
-      if (below + 160 <= size.height - 20) {
-        top = below;
-      } else {
-        top = above.clamp(20.0, size.height - 180);
-      }
+      top = (_targetRect!.bottom + 18).clamp(
+        20.0,
+        size.height - 185,
+      );
     }
 
-    final left = (size.width - width) / 2;
-
     return Positioned(
-      left: left.clamp(horizontalMargin, size.width - width - horizontalMargin),
+      left: (size.width - width) / 2,
       top: top,
       width: width,
-      child: _hintCard(step),
-    );
-  }
-
-  Widget _hintCard(_TourStep step) {
-    final last = index == widget.steps.length - 1;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 30,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [green, teal],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    color: Colors.white,
-                    size: 19,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    step.title,
-                    style: const TextStyle(
-                      color: text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${index + 1}/${widget.steps.length}',
-                  style: const TextStyle(
-                    color: subtext,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              step.message,
-              style: const TextStyle(
-                color: subtext,
-                fontSize: 11,
-                height: 1.65,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: busy ? null : _skip,
-                  child: const Text(
-                    'رد کردن تور',
-                    style: TextStyle(
-                      color: subtext,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: busy ? null : _next,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 10,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    last ? 'شروع کنیم' : 'بعدی',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(
+          18,
+          16,
+          18,
+          15,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 30,
+              offset: Offset(0, 12),
             ),
           ],
+        ),
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [green, teal],
+                      ),
+                      borderRadius:
+                          BorderRadius.all(
+                        Radius.circular(12),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.auto_awesome_rounded,
+                      color: Colors.white,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      step.title,
+                      style: const TextStyle(
+                        color: text,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${_index + 1}/${_steps.length}',
+                    style: const TextStyle(
+                      color: subtext,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                step.message,
+                style: const TextStyle(
+                  color: subtext,
+                  fontSize: 11,
+                  height: 1.65,
+                ),
+              ),
+              if (step.navigationIndex != null &&
+                  _index != _steps.length - 1) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'برای دیدن این بخش می‌توانی روی تب مشخص‌شده بزنـی؛ سپس «بعدی» را انتخاب کن.',
+                  style: TextStyle(
+                    color: subtext,
+                    fontSize: 9,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: _busy ? null : _skip,
+                    child: const Text(
+                      'رد کردن تور',
+                      style: TextStyle(
+                        color: subtext,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: _busy ? null : _next,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      _index == _steps.length - 1
+                          ? 'شروع کنیم'
+                          : 'بعدی',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _SpotlightPainter extends CustomPainter {
+class _TourSpotlightPainter extends CustomPainter {
   final Rect? targetRect;
 
-  const _SpotlightPainter({required this.targetRect});
+  const _TourSpotlightPainter({required this.targetRect});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -517,7 +685,7 @@ class _SpotlightPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SpotlightPainter oldDelegate) {
+  bool shouldRepaint(covariant _TourSpotlightPainter oldDelegate) {
     return oldDelegate.targetRect != targetRect;
   }
 }
