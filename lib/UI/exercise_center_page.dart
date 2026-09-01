@@ -43,7 +43,7 @@ class ExerciseCenterPage extends StatelessWidget {
       level: 'آسان',
       icon: Icons.back_hand_rounded,
       videoUrl:
-      'https://rdlxrnnvebkmldqoedpf.supabase.co/storage/v1/object/sign/exercise-videos/arms.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9jY2I1ZGRmNi1iMGE1LTRhMzQtYTg5MC1lZjhkMzJhYzhhOTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJleGVyY2lzZS12aWRlby9hcm1zLm1wNCIsInNjb3BlIjoiZG93bmxvYWQiLCJpYXQiOjE3ODcwMDQ4NDIsImV4cCI6MTgxODU0MDg0Mn0.Iu3Z8UFlyis7aW506Kxl45LC5CtijGVNkZuB7-I_rdc',
+      'https://rdlxrnnvebkmldqoedpf.supabase.co/storage/v1/object/sign/exercise-videos/arms.mp4?token=eyJraWQiOiJjY2I1ZGRmNi1iMGE1LTRhMzQtYTg5MC1lZjhkMzJhYzhhOTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJleGVyY2lzZS12aWRlb3MvYXJtcy5tcDQiLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzg4MjQ3NzA0LCJleHAiOjE4MTk3ODM3MDR9.mZLV0k5ay2z_e-3_bPP1mjHm-099BmmqEDGoQkUO-QY',
       category: 'دست و بازو',
     ),
 
@@ -65,7 +65,7 @@ class ExerciseCenterPage extends StatelessWidget {
       level: 'آسان',
       icon: Icons.pan_tool_outlined,
       videoUrl:
-      'https://rdlxrnnvebkmldqoedpf.supabase.co/storage/v1/object/sign/exercise-videos/palms.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9jY2I1ZGRmNi1iMGE1LTRhMzQtYTg5MC1lZjhkMzJhYzhhOTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJleGVyY2lzZS12aWRlby9wYWxtcy5tcDQiLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzg3MDA0OTA1LCJleHAiOjE4MTg1NDA5MDV9.OKizaq5xHty-YiZBCugqr4C4LLNH_KY7N2oLMpjS1l4',
+      'https://rdlxrnnvebkmldqoedpf.supabase.co/storage/v1/object/sign/exercise-videos/palms.mp4?token=eyJraWQiOiJjY2I1ZGRmNi1iMGE1LTRhMzQtYTg5MC1lZjhkMzJhYzhhOTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJleGVyY2lzZS12aWRlb3MvcGFsbXMubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4ODI1MDMzMiwiZXhwIjoxODE5Nzg2MzMyfQ.Tz_bZAJPjO8l56Qq75hYG5Xds8_Q5PZU_jyrJYQzx10',
       category: 'دست و مچ',
     ),
 
@@ -76,7 +76,7 @@ class ExerciseCenterPage extends StatelessWidget {
       level: 'آسان',
       icon: Icons.back_hand_outlined,
       videoUrl:
-      'https://rdlxrnnvebkmldqoedpf.supabase.co/storage/v1/object/sign/exercise-videos/wrist.mp4?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9jY2I1ZGRmNi1iMGE1LTRhMzQtYTg5MC1lZjhkMzJhYzhhOTUiLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzg3MDA0OTEzLCJleHAiOjE4MTg1NDA5MTN9.2b7b6DULqAfK1gw6ar7PXl0BRq8wzmbEt7eKkLfjsIs',
+      'https://rdlxrnnvebkmldqoedpf.supabase.co/storage/v1/object/sign/exercise-videos/wrist.mp4?token=eyJraWQiOiJjY2I1ZGRmNi1iMGE1LTRhMzQtYTg5MC1lZjhkMzJhYzhhOTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJleGVyY2lzZS12aWRlb3Mvd3Jpc3QubXA0Iiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4ODI1MDM2MiwiZXhwIjoxODE5Nzg2MzYyfQ.tZbHtXgExobbzM4Wq4lxlyWZFgEAyRp5qAgJ8wivFc8',
       category: 'دست و مچ',
     ),
   ];

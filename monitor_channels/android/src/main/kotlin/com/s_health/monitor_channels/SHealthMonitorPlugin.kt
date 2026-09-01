@@ -386,14 +386,19 @@ class SHealthMonitorPlugin :
     private fun readHunchDivisorFromCall(
         arguments: Any?,
     ): Double? {
-        val args = arguments as? Map<*, *> ?: return null
+        val args = arguments as? Map<*, *>
+            ?: return null
 
-        val canonicalValue = args[EXTRA_HUNCH_DIVISOR]
-        val legacyValue = args["hunchDivisor"]
+        val canonicalValue =
+            args[EXTRA_HUNCH_DIVISOR]
 
-        return when (
-            val value = canonicalValue ?: legacyValue,
-        ) {
+        val legacyValue =
+            args["hunchDivisor"]
+
+        val value =
+            canonicalValue ?: legacyValue
+
+        return when (value) {
             is Number -> value.toDouble()
             is String -> value.toDoubleOrNull()
             else -> null
