@@ -320,7 +320,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     if (!mounted) return;
 
     await Future<void>.delayed(
-      const Duration(milliseconds: 120),
+      const Duration(milliseconds: 300),
     );
 
     if (!mounted) return;
@@ -341,20 +341,25 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
     switch (step.target) {
       case _TourTarget.dashboardSummary:
+        final height = math.min(
+          255.0,
+          size.height * 0.34,
+        ).toDouble();
+
         rect = Rect.fromLTWH(
-          16,
-          padding.top + 140,
-          size.width - 32,
-          math.min(255, size.height * 0.34),
+          16.0,
+          padding.top + 140.0,
+          size.width - 32.0,
+          height,
         );
         break;
 
       case _TourTarget.monitoring:
         rect = Rect.fromLTWH(
-          16,
-          padding.top + 67,
-          size.width - 32,
-          95,
+          16.0,
+          padding.top + 67.0,
+          size.width - 32.0,
+          95.0,
         );
         break;
 
@@ -367,11 +372,16 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
         break;
 
       case _TourTarget.settings:
+        final height = math.min(
+          190.0,
+          size.height * 0.27,
+        ).toDouble();
+
         rect = Rect.fromLTWH(
-          16,
-          padding.top + 76,
-          size.width - 32,
-          math.min(190, size.height * 0.27),
+          16.0,
+          padding.top + 76.0,
+          size.width - 32.0,
+          height,
         );
         break;
     }
@@ -399,13 +409,13 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
     final bottom = math.max(
       padding.bottom + bottomPadding,
-      12,
-    );
+      12.0,
+    ).toDouble();
 
     return Rect.fromLTWH(
-      horizontal + itemWidth * index + 3,
-      size.height - bottom - barHeight - 3,
-      itemWidth - 6,
+      horizontal + itemWidth * index + 3.0,
+      size.height - bottom - barHeight - 3.0,
+      itemWidth - 6.0,
       barHeight,
     );
   }
@@ -481,26 +491,27 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   }
 
   Widget _buildHint(Size size, _TourStep step) {
-    final width = math.min(340.0, size.width - 32);
+    final width = math.min(
+      340.0,
+      size.width - 32.0,
+    ).toDouble();
 
     double top;
 
     if (_targetRect == null) {
-      top = (size.height - 190) / 2;
+      top = (size.height - 190.0) / 2.0;
     } else if (_targetRect!.top > size.height * 0.55) {
-      top = (_targetRect!.top - 205).clamp(
-        20.0,
-        size.height - 185,
-      );
+      top = (_targetRect!.top - 205.0)
+          .clamp(20.0, size.height - 185.0)
+          .toDouble();
     } else {
-      top = (_targetRect!.bottom + 18).clamp(
-        20.0,
-        size.height - 185,
-      );
+      top = (_targetRect!.bottom + 18.0)
+          .clamp(20.0, size.height - 185.0)
+          .toDouble();
     }
 
     return Positioned(
-      left: (size.width - width) / 2,
+      left: (size.width - width) / 2.0,
       top: top,
       width: width,
       child: Container(
