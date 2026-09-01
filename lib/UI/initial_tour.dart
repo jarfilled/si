@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'calibration_screen.dart';
 import 'dashboard.dart';
-import 'settings_page.dart';
 
 class InitialTourPage extends StatefulWidget {
   final String userGender;
@@ -26,6 +25,7 @@ class _InitialTourPageState extends State<InitialTourPage> {
   bool _ready = false;
   bool _completed = false;
   OverlayEntry? _entry;
+  bool _settingsOpened = false;
 
   @override
   void initState() {
@@ -34,6 +34,9 @@ class _InitialTourPageState extends State<InitialTourPage> {
   }
 
   Future<void> _prepare() async {
+    // The tour intentionally runs on every successful login.
+    // Keep the legacy completion check in place only so older code that
+    // references InitialTour.hasCompleted() still compiles.
     final completed = await InitialTour.hasCompleted();
 
     if (!mounted) return;
@@ -71,6 +74,7 @@ class _InitialTourPageState extends State<InitialTourPage> {
     entry = OverlayEntry(
       builder: (_) => _InitialTourOverlay(
         userGender: widget.userGender,
+        hostContext: context,
         onFinished: () async {
           await InitialTour.markCompleted();
 
@@ -89,6 +93,15 @@ class _InitialTourPageState extends State<InitialTourPage> {
 
           if (mounted) {
             await _goToDestination();
+          }
+        },
+        onSettingsOpened: () async {
+          _settingsOpened = true;
+          await InitialTour.markCompleted();
+
+          if (_entry != null) {
+            _entry!.remove();
+            _entry = null;
           }
         },
       ),
@@ -154,7 +167,7 @@ class _InitialTourPageState extends State<InitialTourPage> {
       );
     }
 
-    if (_completed) {
+    if (_completed || _settingsOpened) {
       return const Scaffold(
         backgroundColor: Color(0xFFF4F9F7),
       );
@@ -167,54 +180,58 @@ class _InitialTourPageState extends State<InitialTourPage> {
 }
 
 class InitialTour {
-  static const String completionKey =
-      'initial_app_tour_completed';
+  static const String completionKey = 'initial_app_tour_completed';
 
   static Future<bool> hasCompleted() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(completionKey) ?? false;
+    // Deliberately false: the onboarding tour is shown on every login.
+    return false;
   }
 
   static Future<void> markCompleted() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(completionKey, true);
+    // Kept as a compatibility no-op. The tour is intentionally not persisted.
   }
 
-  static Future<void> reset() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(completionKey);
-  }
+  static Future<void> reset() async {}
 }
 
 class _InitialTourOverlay extends StatefulWidget {
   final String userGender;
+  final BuildContext hostContext;
   final Future<void> Function() onFinished;
   final Future<void> Function() onSkipped;
+  final Future<void> Function() onSettingsOpened;
 
   const _InitialTourOverlay({
     required this.userGender,
+    required this.hostContext,
     required this.onFinished,
     required this.onSkipped,
+    required this.onSettingsOpened,
   });
 
   @override
-  State<_InitialTourOverlay> createState() =>
-      _InitialTourOverlayState();
+  State<_InitialTourOverlay> createState() => _InitialTourOverlayState();
 }
 
 class _TourStep {
   final String title;
   final String message;
   final _TourTarget target;
+  final String? textTarget;
+  final String? textPrefix;
   final int? navigationIndex;
-  final bool openSettings;
+  final bool clickableTarget;
+  final bool settingsEntry;
 
   const _TourStep({
     required this.title,
     required this.message,
     required this.target,
+    this.textTarget,
+    this.textPrefix,
     this.navigationIndex,
-    this.openSettings = false,
+    this.clickableTarget = true,
+    this.settingsEntry = false,
   });
 }
 
@@ -222,7 +239,7 @@ enum _TourTarget {
   dashboardSummary,
   monitoring,
   navigation,
-  settings,
+  settingsEntry,
 }
 
 class _InitialTourOverlayState extends State<_InitialTourOverlay> {
@@ -235,8 +252,8 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
   int _index = 0;
   Rect? _targetRect;
+  Element? _targetElement;
   bool _busy = false;
-  bool _settingsOpened = false;
 
   @override
   void initState() {
@@ -244,31 +261,38 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
     final female = widget.userGender == 'female';
 
+    // Exact navigation order:
+    // male   = سلامت - بدن - ورزش - پروفایل
+    // female = سلامت - بدن - ورزش - بانوان - پروفایل
     _steps = [
       const _TourStep(
         title: 'مرکز سلامت تو',
         message:
-            'اینجا خلاصه وضعیت روزانه، امتیاز سلامت و اطلاعات مهم مربوط به استفاده از گوشی را می‌بینی. این صفحه نقطه شروع اصلی سی است.',
+            'اینجا خلاصه وضعیت روزانه، امتیاز سلامت و مهم‌ترین اطلاعات امروز را می‌بینی.',
         target: _TourTarget.dashboardSummary,
+        textTarget: 'امتیاز سلامت امروز',
       ),
       const _TourStep(
         title: 'پایش بدن',
         message:
-            'سی می‌تواند گردن، قوز، مچ دست، فاصله از صفحه و نور محیط را در پس‌زمینه بررسی و ثبت کند. وضعیت فعال بودن پایش را از این قسمت متوجه می‌شوی.',
+            'سی می‌تواند گردن، قوز، مچ دست، فاصله از صفحه و نور محیط را در پس‌زمینه بررسی و ثبت کند.',
         target: _TourTarget.monitoring,
+        textPrefix: 'پایش فعال',
       ),
       const _TourStep(
         title: 'تحلیل وضعیت بدن',
         message:
-            'برای دیدن جزئیات هشدارها و روند وضعیت بدنی، تب «بدن» را انتخاب کن.',
+            'برای دیدن جزئیات هشدارها و روند وضعیت بدنی، روی تب «بدن» بزن.',
         target: _TourTarget.navigation,
+        textTarget: 'بدن',
         navigationIndex: 1,
       ),
       const _TourStep(
         title: 'تمرین و حرکت',
         message:
-            'در «ورزش» می‌توانی تمرین‌های کوتاه و حرکات مناسب را پیدا کنی. هر زمان احساس خستگی یا فشار کردی، این بخش را به یاد داشته باش.',
+            'در «ورزش» می‌توانی تمرین‌های کوتاه و حرکات مناسب را پیدا کنی.',
         target: _TourTarget.navigation,
+        textTarget: 'ورزش',
         navigationIndex: 2,
       ),
       if (female)
@@ -277,21 +301,24 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
           message:
               'در بخش «بانوان» می‌توانی چرخه، علائم روزانه و روند تغییراتت را ثبت و دنبال کنی.',
           target: _TourTarget.navigation,
+          textTarget: 'بانوان',
           navigationIndex: 3,
         ),
       _TourStep(
         title: 'پروفایل',
         message:
-            'پروفایل یکی از مهم‌ترین بخش‌های برنامه است. اطلاعات حساب، مشخصات شخصی، وضعیت کالیبراسیون و گزینه‌های مرتبط با حساب کاربری را از اینجا مدیریت می‌کنی.',
+            'پروفایل یکی از مهم‌ترین بخش‌های برنامه است؛ اطلاعات حساب، مشخصات شخصی و کالیبراسیون را از اینجا مدیریت می‌کنی.',
         target: _TourTarget.navigation,
+        textTarget: 'پروفایل',
         navigationIndex: female ? 4 : 3,
       ),
       const _TourStep(
         title: 'تنظیمات',
         message:
-            'در تنظیمات کنترل‌های اصلی سی قرار دارند: پایش پس‌زمینه، حالت هشدار شناور، صدای هشدارها و صداهای اختصاصی، محافظت دیجیتال و مجوزها. این صفحه را باز کرده‌ایم تا جای آن را هم بشناسی.',
-        target: _TourTarget.settings,
-        openSettings: true,
+            'از داخل پروفایل وارد «تنظیمات پایش» می‌شوی. آنجا پایش پس‌زمینه، هشدار شناور، صداهای هشدار، صداهای اختصاصی، محافظت دیجیتال و مجوزها را کنترل می‌کنی.',
+        target: _TourTarget.settingsEntry,
+        textTarget: 'تنظیمات پایش',
+        settingsEntry: true,
       ),
     ];
 
@@ -301,26 +328,15 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   }
 
   Future<void> _prepareStep() async {
-    final step = _steps[_index];
-
-    if (step.openSettings && !_settingsOpened) {
-      _settingsOpened = true;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const SettingsPage(),
-          ),
-        );
-      });
-    }
-
     if (!mounted) return;
 
+    setState(() {
+      _targetRect = null;
+      _targetElement = null;
+    });
+
     await Future<void>.delayed(
-      const Duration(milliseconds: 300),
+      const Duration(milliseconds: 150),
     );
 
     if (!mounted) return;
@@ -333,104 +349,123 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   }
 
   void _calculateTarget() {
-    final size = MediaQuery.sizeOf(context);
-    final padding = MediaQuery.viewPaddingOf(context);
     final step = _steps[_index];
 
-    Rect rect;
+    Element? element;
 
-    switch (step.target) {
-      case _TourTarget.dashboardSummary:
-        final height = math.min(
-          255.0,
-          size.height * 0.34,
-        ).toDouble();
-
-        rect = Rect.fromLTWH(
-          16.0,
-          padding.top + 140.0,
-          size.width - 32.0,
-          height,
-        );
-        break;
-
-      case _TourTarget.monitoring:
-        rect = Rect.fromLTWH(
-          16.0,
-          padding.top + 67.0,
-          size.width - 32.0,
-          95.0,
-        );
-        break;
-
-      case _TourTarget.navigation:
-        rect = _navigationTarget(
-          size,
-          padding,
-          step.navigationIndex ?? 0,
-        );
-        break;
-
-      case _TourTarget.settings:
-        final height = math.min(
-          190.0,
-          size.height * 0.27,
-        ).toDouble();
-
-        rect = Rect.fromLTWH(
-          16.0,
-          padding.top + 76.0,
-          size.width - 32.0,
-          height,
-        );
-        break;
+    if (step.textTarget != null) {
+      element = _findTextElement(
+        step.textTarget!,
+        prefix: step.textPrefix,
+      );
     }
 
-    if (_targetRect != rect) {
-      setState(() {
-        _targetRect = rect;
-      });
+    if (element == null) {
+      debugPrint(
+        '[InitialTour] Target not found: '
+        '${step.textTarget ?? step.textPrefix ?? step.target}',
+      );
+      return;
     }
+
+    final targetAncestor = _targetAncestor(element, step.target);
+    final renderElement = targetAncestor ?? element;
+    final renderObject = renderElement.renderObject;
+
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return;
+    }
+
+    final rect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
+
+    if (!mounted) return;
+
+    setState(() {
+      _targetElement = renderElement;
+      _targetRect = rect;
+    });
   }
 
-  Rect _navigationTarget(
-    Size size,
-    EdgeInsets padding,
-    int index,
+  Element? _findTextElement(
+    String target, {
+    String? prefix,
+  }) {
+    Element? found;
+
+    void visit(Element element) {
+      if (found != null) return;
+
+      final childWidget = element.widget;
+
+      if (childWidget is Text) {
+        final data = childWidget.data ?? '';
+
+        if ((prefix != null && data.startsWith(prefix)) ||
+            (prefix == null && data == target)) {
+          found = element;
+          return;
+        }
+      }
+
+      element.visitChildElements(visit);
+    }
+
+    widget.hostContext.visitChildElements(visit);
+    return found;
+  }
+
+  Element? _targetAncestor(
+    Element element,
+    _TourTarget target,
   ) {
-    const horizontal = 14.0;
-    const bottomPadding = 12.0;
-    const barHeight = 68.0;
+    Element? found;
 
-    final count = widget.userGender == 'female' ? 5 : 4;
-    final availableWidth =
-        size.width - (horizontal * 2);
-    final itemWidth = availableWidth / count;
+    bool wantsWidget(Widget widget) {
+      switch (target) {
+        case _TourTarget.navigation:
+        case _TourTarget.settingsEntry:
+          return widget is InkWell;
+        case _TourTarget.dashboardSummary:
+        case _TourTarget.monitoring:
+          return widget is Container;
+      }
+    }
 
-    final bottom = math.max(
-      padding.bottom + bottomPadding,
-      12.0,
-    ).toDouble();
+    element.visitAncestorElements((ancestor) {
+      if (wantsWidget(ancestor.widget)) {
+        found = ancestor;
+        return false;
+      }
+      return true;
+    });
 
-    return Rect.fromLTWH(
-      horizontal + itemWidth * index + 3.0,
-      size.height - bottom - barHeight - 3.0,
-      itemWidth - 6.0,
-      barHeight,
-    );
+    return found;
   }
 
-  Future<void> _next() async {
-    if (_busy) return;
+  Future<void> _handleOverlayTap(TapUpDetails details) async {
+    if (_busy || _targetRect == null) return;
+
+    if (!_targetRect!.contains(details.globalPosition)) {
+      return;
+    }
+
+    final step = _steps[_index];
 
     setState(() => _busy = true);
 
     try {
-      if (_index == _steps.length - 1) {
-        if (_settingsOpened && mounted) {
-          Navigator.of(context).pop();
-        }
+      if (step.settingsEntry) {
+        await _invokeTargetTap();
+        await widget.onSettingsOpened();
+        return;
+      }
 
+      if (step.target == _TourTarget.navigation ||
+          step.settingsEntry) {
+        await _invokeTargetTap();
+      }
+
+      if (_index >= _steps.length - 1) {
         await widget.onFinished();
         return;
       }
@@ -438,6 +473,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
       setState(() {
         _index += 1;
         _targetRect = null;
+        _targetElement = null;
       });
 
       await _prepareStep();
@@ -448,16 +484,47 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     }
   }
 
+  Future<void> _invokeTargetTap() async {
+    final element = _targetElement;
+
+    if (element == null) return;
+
+    final inkElement = _findAncestorInkWell(element);
+
+    if (inkElement == null) {
+      return;
+    }
+
+    final widget = inkElement.widget;
+
+    if (widget is InkWell && widget.onTap != null) {
+      widget.onTap!();
+      await Future<void>.delayed(
+        const Duration(milliseconds: 220),
+      );
+    }
+  }
+
+  Element? _findAncestorInkWell(Element start) {
+    Element? found;
+
+    start.visitAncestorElements((ancestor) {
+      if (ancestor.widget is InkWell) {
+        found = ancestor;
+        return false;
+      }
+      return true;
+    });
+
+    return found;
+  }
+
   Future<void> _skip() async {
     if (_busy) return;
 
     setState(() => _busy = true);
 
     try {
-      if (_settingsOpened && mounted) {
-        Navigator.of(context).pop();
-      }
-
       await widget.onSkipped();
     } finally {
       if (mounted) {
@@ -476,14 +543,23 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _TourSpotlightPainter(
-                  targetRect: _targetRect,
-                ),
+            child: CustomPaint(
+              painter: _TourSpotlightPainter(
+                targetRect: _targetRect,
               ),
             ),
           ),
+
+          // The overlay intentionally receives all pointer input.
+          // This prevents scrolling the dashboard and moving the spotlight.
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: _handleOverlayTap,
+              child: const SizedBox.expand(),
+            ),
+          ),
+
           _buildHint(size, step),
         ],
       ),
@@ -499,14 +575,14 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     double top;
 
     if (_targetRect == null) {
-      top = (size.height - 190.0) / 2.0;
+      top = (size.height - 205.0) / 2.0;
     } else if (_targetRect!.top > size.height * 0.55) {
-      top = (_targetRect!.top - 205.0)
-          .clamp(20.0, size.height - 185.0)
+      top = (_targetRect!.top - 225.0)
+          .clamp(20.0, math.max(20.0, size.height - 205.0))
           .toDouble();
     } else {
       top = (_targetRect!.bottom + 18.0)
-          .clamp(20.0, size.height - 185.0)
+          .clamp(20.0, math.max(20.0, size.height - 205.0))
           .toDouble();
     }
 
@@ -514,132 +590,135 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
       left: (size.width - width) / 2.0,
       top: top,
       width: width,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(
-          18,
-          16,
-          18,
-          15,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 30,
-              offset: Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [green, teal],
+      child: IgnorePointer(
+        ignoring: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(
+            18,
+            16,
+            18,
+            15,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 30,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [green, teal],
+                        ),
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(12),
+                        ),
                       ),
-                      borderRadius:
-                          BorderRadius.all(
-                        Radius.circular(12),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 19,
                       ),
                     ),
-                    child: const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: Colors.white,
-                      size: 19,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        step.title,
+                        style: const TextStyle(
+                          color: text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      step.title,
+                    Text(
+                      '${_index + 1}/${_steps.length}',
                       style: const TextStyle(
-                        color: text,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${_index + 1}/${_steps.length}',
-                    style: const TextStyle(
-                      color: subtext,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                step.message,
-                style: const TextStyle(
-                  color: subtext,
-                  fontSize: 11,
-                  height: 1.65,
-                ),
-              ),
-              if (step.navigationIndex != null) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'برای دیدن این بخش می‌توانی روی تب مشخص‌شده بزنـی؛ سپس «بعدی» را انتخاب کن.',
-                  style: TextStyle(
-                    color: subtext,
-                    fontSize: 9,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: _busy ? null : _skip,
-                    child: const Text(
-                      'رد کردن تور',
-                      style: TextStyle(
                         color: subtext,
                         fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  step.message,
+                  style: const TextStyle(
+                    color: subtext,
+                    fontSize: 11,
+                    height: 1.65,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.touch_app_rounded,
+                      color: green,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        step.settingsEntry
+                            ? 'برای باز کردن تنظیمات روی گزینه مشخص‌شده بزن.'
+                            : step.target == _TourTarget.navigation
+                                ? 'روی تب مشخص‌شده بزن تا وارد این بخش شوی.'
+                                : 'روی بخش مشخص‌شده بزن تا به مرحله بعد برویم.',
+                        style: const TextStyle(
+                          color: green,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: _busy ? null : _skip,
+                      child: const Text(
+                        'رد کردن تور',
+                        style: TextStyle(
+                          color: subtext,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      step.settingsEntry
+                          ? 'آخرین مرحله'
+                          : 'روی بخش مشخص‌شده بزن',
+                      style: const TextStyle(
+                        color: subtext,
+                        fontSize: 9,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: _busy ? null : _next,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      _index == _steps.length - 1
-                          ? 'شروع کنیم'
-                          : 'بعدی',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
