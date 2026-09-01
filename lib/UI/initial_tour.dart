@@ -135,6 +135,7 @@ class _TourStep {
   final String? textPrefix;
   final IconData? iconTarget;
   final bool settingsEntry;
+  final String? keyTarget;
 
   const _TourStep({
     required this.title,
@@ -144,6 +145,7 @@ class _TourStep {
     this.textPrefix,
     this.iconTarget,
     this.settingsEntry = false,
+    this.keyTarget,
   });
 }
 
@@ -201,32 +203,32 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
         title: 'تحلیل وضعیت بدن',
         message: 'برای دیدن جزئیات هشدارها و روند وضعیت بدنی، روی تب «بدن» بزن.',
         target: _TourTarget.navigation,
-        textTarget: 'بدن',
+        keyTarget: 'tour-nav-بدن',
       ),
       const _TourStep(
         title: 'تمرین و حرکت',
         message: 'در «ورزش» می‌توانی تمرین‌های کوتاه و حرکات مناسب را پیدا کنی.',
         target: _TourTarget.navigation,
-        textTarget: 'ورزش',
+        keyTarget: 'tour-nav-ورزش',
       ),
       if (female)
         const _TourStep(
           title: 'سلامت و قاعدگی',
           message: 'در بخش «بانوان» می‌توانی چرخه، علائم روزانه و روند تغییراتت را ثبت و دنبال کنی.',
           target: _TourTarget.navigation,
-          textTarget: 'بانوان',
+          keyTarget: 'tour-nav-بانوان',
         ),
       const _TourStep(
         title: 'پروفایل',
         message: 'پروفایل یکی از مهم‌ترین بخش‌های برنامه است؛ اطلاعات حساب، مشخصات شخصی و کالیبراسیون را از اینجا مدیریت می‌کنی.',
         target: _TourTarget.navigation,
-        textTarget: 'پروفایل',
+        keyTarget: 'tour-nav-پروفایل',
       ),
       const _TourStep(
         title: 'تنظیمات',
         message: 'از داخل پروفایل وارد «تنظیمات پایش» می‌شوی. آنجا پایش پس‌زمینه، هشدار شناور، صداها، محافظت دیجیتال و مجوزها را کنترل می‌کنی.',
         target: _TourTarget.settingsEntry,
-        textTarget: 'تنظیمات پایش',
+        keyTarget: 'tour-settings-entry',
         settingsEntry: true,
       ),
     ];
@@ -249,7 +251,9 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   void _calculateTarget() {
     final step = _steps[_index];
     Element? element;
-    if (step.iconTarget != null) {
+    if (step.keyTarget != null) {
+      element = _findElementByKey(step.keyTarget!);
+    } else if (step.iconTarget != null) {
       element = _findIconElement(step.iconTarget!);
     } else if (step.textTarget != null) {
       element = _findTextElement(step.textTarget!, prefix: step.textPrefix);
@@ -269,6 +273,21 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
       _targetElement = renderElement;
       _targetRect = rect;
     });
+  }
+
+  Element? _findElementByKey(String value) {
+    Element? found;
+    void visit(Element element) {
+      if (found != null) return;
+      final key = element.widget.key;
+      if (key is ValueKey<String> && key.value == value) {
+        found = element;
+        return;
+      }
+      element.visitChildElements(visit);
+    }
+    widget.hostContext.visitChildElements(visit);
+    return found;
   }
 
   Element? _findTextElement(String target, {String? prefix}) {

@@ -912,12 +912,37 @@ class _ProfilePageState extends State<ProfilePage> {
             color: line,
           ),
 
-          _action(
-            Icons.settings_outlined,
-            'تنظیمات پایش',
-            'دوربین، هشدارها و محافظت از محتوا',
-            _openSettings,
+          _tourSettingsAction(),
+        ],
+      ),
+    );
+  }
+
+  Widget _tourSettingsAction() {
+    return InkWell(
+      key: const ValueKey<String>('tour-settings-entry'),
+      onTap: _openSettings,
+      borderRadius: BorderRadius.circular(15),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
+            child: const Icon(Icons.settings_outlined, color: green),
           ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('تنظیمات پایش', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)),
+                SizedBox(height: 3),
+                Text('دوربین، هشدارها و محافظت از محتوا', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: subtext, fontSize: 10)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_left_rounded, color: subtext),
         ],
       ),
     );
