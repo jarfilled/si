@@ -74,12 +74,6 @@ class _InitialTourPageState extends State<InitialTourPage> {
         onFinished: () async {
           await InitialTour.markCompleted();
 
-          try {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          } catch (_) {}
-
           entry.remove();
           _entry = null;
 
@@ -89,12 +83,6 @@ class _InitialTourPageState extends State<InitialTourPage> {
         },
         onSkipped: () async {
           await InitialTour.markCompleted();
-
-          try {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          } catch (_) {}
 
           entry.remove();
           _entry = null;
@@ -210,7 +198,8 @@ class _InitialTourOverlay extends StatefulWidget {
   });
 
   @override
-  State<_InitialTourOverlay> createState() => _InitialTourOverlayState();
+  State<_InitialTourOverlay> createState() =>
+      _InitialTourOverlayState();
 }
 
 class _TourStep {
@@ -286,7 +275,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
         const _TourStep(
           title: 'سلامت و قاعدگی',
           message:
-              'بخش «بانوان» برای ثبت چرخه، علائم روزانه و مشاهده روند تغییرات طراحی شده است.',
+              'در بخش «بانوان» می‌توانی چرخه، علائم روزانه و روند تغییراتت را ثبت و دنبال کنی.',
           target: _TourTarget.navigation,
           navigationIndex: 3,
         ),
@@ -317,17 +306,21 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     if (step.openSettings && !_settingsOpened) {
       _settingsOpened = true;
 
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const SettingsPage(),
-        ),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const SettingsPage(),
+          ),
+        );
+      });
     }
 
     if (!mounted) return;
 
     await Future<void>.delayed(
-      const Duration(milliseconds: 80),
+      const Duration(milliseconds: 120),
     );
 
     if (!mounted) return;
@@ -424,6 +417,10 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
     try {
       if (_index == _steps.length - 1) {
+        if (_settingsOpened && mounted) {
+          Navigator.of(context).pop();
+        }
+
         await widget.onFinished();
         return;
       }
@@ -447,6 +444,10 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     setState(() => _busy = true);
 
     try {
+      if (_settingsOpened && mounted) {
+        Navigator.of(context).pop();
+      }
+
       await widget.onSkipped();
     } finally {
       if (mounted) {
@@ -576,8 +577,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
                   height: 1.65,
                 ),
               ),
-              if (step.navigationIndex != null &&
-                  _index != _steps.length - 1) ...[
+              if (step.navigationIndex != null) ...[
                 const SizedBox(height: 8),
                 const Text(
                   'برای دیدن این بخش می‌توانی روی تب مشخص‌شده بزنـی؛ سپس «بعدی» را انتخاب کن.',
@@ -613,8 +613,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
                         vertical: 10,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     child: Text(
