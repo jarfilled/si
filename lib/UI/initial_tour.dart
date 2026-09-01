@@ -264,7 +264,9 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
   void _calculateTarget() {
     final step = _steps[_index];
     Element? element;
-    if (step.keyTarget != null) {
+    if (step.settingsEntry) {
+      element = ProfilePage.tourKey.currentState?.tourSettingsContext as Element?;
+    } else if (step.keyTarget != null) {
       element = _findElementByKey(step.keyTarget!);
     } else if (step.iconTarget != null) {
       element = _findIconElement(step.iconTarget!);

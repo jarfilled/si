@@ -957,6 +957,8 @@ class ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  BuildContext? get tourSettingsContext => _tourSettingsRowKey.currentContext;
+
   Future<void> ensureTourSettingsVisible() async {
     if (!_tourScrollController.hasClients) return;
     await _tourScrollController.animateTo(
