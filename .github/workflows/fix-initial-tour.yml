@@ -1,0 +1,172 @@
+name: Fix initial tour navigation
+
+on:
+  push:
+    branches: [ui-overhaul-2026-08]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Fix initial tour navigation and page transitions')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ui-overhaul-2026-08
+
+      - name: Patch tour
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/UI/initial_tour.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''  Future<void> _invokeTargetTap() async {
+    final element = _targetElement;
+
+    if (element == null) return;
+
+    final inkElement = _findAncestorInkWell(element);
+
+    if (inkElement == null) {
+      return;
+    }
+
+    final widget = inkElement.widget;
+
+    if (widget is InkWell && widget.onTap != null) {
+      widget.onTap!();
+      await Future<void>.delayed(
+        const Duration(milliseconds: 220),
+      );
+    }
+  }
+'''
+
+          new = '''  Future<bool> _invokeTargetTap() async {
+    final element = _targetElement;
+
+    if (element == null) return false;
+
+    // Navigation/settings targets can resolve directly to their InkWell.
+    // The previous implementation only searched ancestors, so the actual
+    // highlighted InkWell itself was never activated.
+    final inkElement = element.widget is InkWell
+        ? element
+        : _findAncestorInkWell(element);
+
+    if (inkElement == null) {
+      return false;
+    }
+
+    final targetWidget = inkElement.widget;
+
+    if (targetWidget is InkWell && targetWidget.onTap != null) {
+      targetWidget.onTap!();
+      await Future<void>.delayed(
+        const Duration(milliseconds: 120),
+      );
+      return true;
+    }
+
+    return false;
+  }
+'''
+
+          if old not in text:
+              raise SystemExit('Could not find _invokeTargetTap block')
+          text = text.replace(old, new, 1)
+
+          old2 = '''      if (step.target == _TourTarget.navigation ||
+          step.settingsEntry) {
+        await _invokeTargetTap();
+      }
+
+      if (_index >= _steps.length - 1) {
+        await widget.onFinished();
+        return;
+      }
+
+      setState(() {
+        _index += 1;
+        _targetRect = null;
+        _targetElement = null;
+      });
+'''
+
+          new2 = '''      if (step.target == _TourTarget.navigation) {
+        final activated = await _invokeTargetTap();
+
+        if (!activated) {
+          debugPrint('[InitialTour] Navigation target could not be activated.');
+          return;
+        }
+
+        // MainNavigationScreen changes its IndexedStack index in setState.
+        // Wait for that rebuild before resolving the next tour target so the
+        // next spotlight belongs to the page that is actually on screen.
+        await WidgetsBinding.instance.endOfFrame;
+        await Future<void>.delayed(
+          const Duration(milliseconds: 260),
+        );
+      }
+
+      if (_index >= _steps.length - 1) {
+        await widget.onFinished();
+        return;
+      }
+
+      setState(() {
+        _index += 1;
+        _targetRect = null;
+        _targetElement = null;
+      });
+'''
+
+          if old2 not in text:
+              raise SystemExit('Could not find navigation block')
+          text = text.replace(old2, new2, 1)
+
+          old3 = '''      if (step.settingsEntry) {
+        await _invokeTargetTap();
+        await widget.onSettingsOpened();
+        return;
+      }
+'''
+
+          new3 = '''      if (step.settingsEntry) {
+        final activated = await _invokeTargetTap();
+
+        if (!activated) {
+          debugPrint('[InitialTour] Settings target could not be activated.');
+          return;
+        }
+
+        await Future<void>.delayed(
+          const Duration(milliseconds: 300),
+        );
+        await widget.onSettingsOpened();
+        return;
+      }
+'''
+
+          if old3 not in text:
+              raise SystemExit('Could not find settings block')
+          text = text.replace(old3, new3, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit tour fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/fix-initial-tour.yml
+          git add lib/UI/initial_tour.dart .github/workflows/fix-initial-tour.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix initial tour navigation and page transitions"
+          git push origin ui-overhaul-2026-08
