@@ -54,6 +54,12 @@ class ProfilePageState extends State<ProfilePage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _tourScrollController.dispose();
+    super.dispose();
+  }
+
   // ---------------------------------------------------------------------------
   // DATA
   // ---------------------------------------------------------------------------
@@ -1267,7 +1273,6 @@ class _EditProfileDialogState
 
   @override
   void dispose() {
-    _tourScrollController.dispose();
     _nameController.dispose();
     _usernameController.dispose();
     _birthController.dispose();
