@@ -575,7 +575,7 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      initialRoute: '/splash',
+      initialRoute: '/login',
 
       routes: {
         '/signup': (_) => const SignupPage(),

@@ -56,11 +56,6 @@ class ProfilePageState extends State<ProfilePage> {
 
   @override
   void dispose() {
-    super.dispose();
-  }
-
-  @override
-  void dispose() {
     _tourScrollController.dispose();
     super.dispose();
   }
