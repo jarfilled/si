@@ -219,6 +219,7 @@ class _TourStep {
   final _TourTarget target;
   final String? textTarget;
   final String? textPrefix;
+  final IconData? iconTarget;
   final int? navigationIndex;
   final bool clickableTarget;
   final bool settingsEntry;
@@ -229,6 +230,7 @@ class _TourStep {
     required this.target,
     this.textTarget,
     this.textPrefix,
+    this.iconTarget,
     this.navigationIndex,
     this.clickableTarget = true,
     this.settingsEntry = false,
@@ -277,7 +279,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
         message:
             'سی می‌تواند گردن، قوز، مچ دست، فاصله از صفحه و نور محیط را در پس‌زمینه بررسی و ثبت کند.',
         target: _TourTarget.monitoring,
-        textPrefix: 'پایش فعال',
+        iconTarget: Icons.radar_rounded,
       ),
       const _TourStep(
         title: 'تحلیل وضعیت بدن',
@@ -353,7 +355,9 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
 
     Element? element;
 
-    if (step.textTarget != null) {
+    if (step.iconTarget != null) {
+      element = _findMonitoringIconElement();
+    } else if (step.textTarget != null) {
       element = _findTextElement(
         step.textTarget!,
         prefix: step.textPrefix,
@@ -363,12 +367,14 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
     if (element == null) {
       debugPrint(
         '[InitialTour] Target not found: '
-        '${step.textTarget ?? step.textPrefix ?? step.target}',
+        '${step.textTarget ?? step.textPrefix ?? step.iconTarget ?? step.target}',
       );
       return;
     }
 
-    final targetAncestor = _targetAncestor(element, step.target);
+    final targetAncestor = step.iconTarget != null
+        ? null
+        : _targetAncestor(element, step.target);
     final renderElement = targetAncestor ?? element;
     final renderObject = renderElement.renderObject;
 
@@ -405,6 +411,28 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
           found = element;
           return;
         }
+      }
+
+      element.visitChildElements(visit);
+    }
+
+    widget.hostContext.visitChildElements(visit);
+    return found;
+  }
+
+  Element? _findMonitoringIconElement() {
+    Element? found;
+
+    void visit(Element element) {
+      if (found != null) return;
+
+      final childWidget = element.widget;
+
+      if (childWidget is Icon &&
+          (childWidget.icon == Icons.radar_rounded ||
+              childWidget.icon == Icons.radar_outlined)) {
+        found = element;
+        return;
       }
 
       element.visitChildElements(visit);
@@ -586,6 +614,14 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
           .toDouble();
     }
 
+    final instruction = step.settingsEntry
+        ? 'برای باز کردن تنظیمات روی گزینه مشخص‌شده بزن.'
+        : step.target == _TourTarget.navigation
+            ? 'روی تب مشخص‌شده بزن تا وارد این بخش شوی.'
+            : step.iconTarget != null
+                ? 'روی آیکون مشخص‌شده بزن تا به مرحله بعد برویم.'
+                : 'روی بخش مشخص‌شده بزن تا به مرحله بعد برویم.';
+
     return Positioned(
       left: (size.width - width) / 2.0,
       top: top,
@@ -675,11 +711,7 @@ class _InitialTourOverlayState extends State<_InitialTourOverlay> {
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        step.settingsEntry
-                            ? 'برای باز کردن تنظیمات روی گزینه مشخص‌شده بزن.'
-                            : step.target == _TourTarget.navigation
-                                ? 'روی تب مشخص‌شده بزن تا وارد این بخش شوی.'
-                                : 'روی بخش مشخص‌شده بزن تا به مرحله بعد برویم.',
+                        instruction,
                         style: const TextStyle(
                           color: green,
                           fontSize: 9,
