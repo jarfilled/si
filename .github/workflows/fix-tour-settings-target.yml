@@ -1,0 +1,49 @@
+name: Fix tour settings target
+on:
+  push:
+    branches: [ui-overhaul-2026-08]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Fix initial tour settings target')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-overhaul-2026-08
+          fetch-depth: 1
+      - name: Patch settings target handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('lib/UI/profile_page.dart')
+          t = p.read_text(encoding='utf-8')
+          marker = '  Future<void> ensureTourSettingsVisible() async {\n'
+          if marker not in t:
+              raise SystemExit('settings visibility method marker missing')
+          getter = "  BuildContext? get tourSettingsContext => _tourSettingsRowKey.currentContext;\n\n"
+          if 'tourSettingsContext' not in t:
+              t = t.replace(marker, getter + marker, 1)
+          p.write_text(t, encoding='utf-8')
+
+          p = Path('lib/UI/initial_tour.dart')
+          t = p.read_text(encoding='utf-8')
+          old = """    if (step.keyTarget != null) {\n      element = _findElementByKey(step.keyTarget!);\n    } else if (step.iconTarget != null) {\n"""
+          new = """    if (step.settingsEntry) {\n      element = ProfilePage.tourKey.currentState?.tourSettingsContext as Element?;\n    } else if (step.keyTarget != null) {\n      element = _findElementByKey(step.keyTarget!);\n    } else if (step.iconTarget != null) {\n"""
+          if old not in t:
+              raise SystemExit('target resolution block missing')
+          t = t.replace(old, new, 1)
+          p.write_text(t, encoding='utf-8')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/UI/profile_page.dart lib/UI/initial_tour.dart
+          git commit -m "Fix initial tour settings target"
+          git push origin ui-overhaul-2026-08
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/fix-tour-settings-target.yml
+          git commit -m "Remove temporary settings target workflow"
+          git push origin ui-overhaul-2026-08
