@@ -1,0 +1,57 @@
+name: Fix tour scroll
+on:
+  push:
+    branches: [ui-overhaul-2026-08]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Fix initial tour profile settings scroll')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-overhaul-2026-08
+          fetch-depth: 1
+      - name: Patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('lib/UI/profile_page.dart')
+          t = p.read_text(encoding='utf-8')
+          t = t.replace("class _ProfilePageState extends State<ProfilePage> {\n", "class _ProfilePageState extends State<ProfilePage> {\n  final ScrollController _tourScrollController = ScrollController();\n  final GlobalKey _tourSettingsKey = GlobalKey();\n", 1)
+          t = t.replace("  @override\n  void dispose() {\n", "  @override\n  void dispose() {\n    _tourScrollController.dispose();\n", 1)
+          t = t.replace("            child: ListView(\n              physics:", "            child: ListView(\n              controller: _tourScrollController,\n              physics:", 1)
+          t = t.replace("return InkWell(\n      key: const ValueKey<String>('tour-settings-entry'),", "return InkWell(\n      key: _tourSettingsKey,", 1)
+          insert = '''\n  /// Scrolls the profile page until the settings action is visible.\n  /// The initial tour calls this through the widget tree before resolving\n  /// the settings spotlight, so the user never has to manually scroll.\n  Future<void> ensureTourSettingsVisible() async {\n    if (!_tourScrollController.hasClients) return;\n    final context = _tourSettingsKey.currentContext;\n    if (context == null) return;\n    await Scrollable.ensureVisible(\n      context,\n      duration: const Duration(milliseconds: 280),\n      curve: Curves.easeOutCubic,\n      alignment: 0.72,\n    );\n    await WidgetsBinding.instance.endOfFrame;\n  }\n\n'''
+          marker = "  Widget _action(\n"
+          t = t.replace(marker, insert + marker, 1)
+          p.write_text(t, encoding='utf-8')
+
+          p = Path('lib/UI/initial_tour.dart')
+          t = p.read_text(encoding='utf-8')
+          t = t.replace("import 'dashboard.dart';\n", "import 'dashboard.dart';\nimport 'profile_page.dart';\n", 1)
+          marker = "  Element? _findElementByKey(String value) {\n"
+          helper = '''  Element? _findProfileSettingsElement() {\n    Element? found;\n    void visit(Element element) {\n      if (found != null) return;\n      final w = element.widget;\n      if (w is ProfilePage) {\n        final state = element.findAncestorStateOfType<_ProfilePageState>();\n        if (state != null) {\n          found = element;\n          return;\n        }\n      }\n      element.visitChildElements(visit);\n    }\n    widget.hostContext.visitChildElements(visit);\n    return found;\n  }\n\n  Future<void> _prepareProfileSettingsStep() async {\n    if (_index >= _steps.length - 1) {\n      // The final step is the profile settings entry. The profile page is\n      // already visible after the profile navigation tap, but its settings\n      // row is below the initial viewport. Scroll it into view before\n      // calculating the spotlight.\n      final profileState = _findProfileState();\n      if (profileState != null) {\n        await profileState.ensureTourSettingsVisible();\n      }\n    }\n  }\n\n  _ProfilePageState? _findProfileState() {\n    _ProfilePageState? found;\n    void visit(Element element) {\n      if (found != null) return;\n      final state = element.findAncestorStateOfType<_ProfilePageState>();\n      if (state != null) {\n        found = state;\n        return;\n      }\n      element.visitChildElements(visit);\n    }\n    widget.hostContext.visitChildElements(visit);\n    return found;\n  }\n\n'''
+          # The private state cannot be referenced from this file; instead use a keyed context below.
+          helper = '''  Future<void> _scrollProfileSettingsIntoView() async {\n    final context = _findElementContextByKey('tour-settings-entry');\n    if (context == null) return;\n    await Scrollable.ensureVisible(\n      context,\n      duration: const Duration(milliseconds: 280),\n      curve: Curves.easeOutCubic,\n      alignment: 0.72,\n    );\n    await WidgetsBinding.instance.endOfFrame;\n  }\n\n  BuildContext? _findElementContextByKey(String value) {\n    Element? found;\n    void visit(Element element) {\n      if (found != null) return;\n      final key = element.widget.key;\n      if (key is ValueKey<String> && key.value == value) {\n        found = element;\n        return;\n      }\n      element.visitChildElements(visit);\n    }\n    widget.hostContext.visitChildElements(visit);\n    return found?.renderObject?.debugCreator is DebugCreator\n        ? found?.renderObject?.debugCreator?.element\n        : found;\n  }\n\n'''
+          if marker not in t: raise SystemExit('marker missing')
+          t = t.replace(marker, helper + marker, 1)
+          old = """      if (step.keyTarget != null) {\n        element = _findElementByKey(step.keyTarget!);\n      } else if (step.iconTarget != null) {\n"""
+          new = """      if (step.keyTarget != null) {\n        if (step.settingsEntry) {\n          await _scrollProfileSettingsIntoView();\n        }\n        element = _findElementByKey(step.keyTarget!);\n      } else if (step.iconTarget != null) {\n"""
+          if old not in t: raise SystemExit('target block missing')
+          t = t.replace(old,new,1)
+          p.write_text(t, encoding='utf-8')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/UI/profile_page.dart lib/UI/initial_tour.dart
+          git commit -m "Fix initial tour profile settings scroll"
+          git push origin ui-overhaul-2026-08
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/fix-tour-scroll.yml
+          git commit -m "Remove temporary tour scroll workflow"
+          git push origin ui-overhaul-2026-08
