@@ -1,0 +1,70 @@
+name: Fix and verify initial tour targets
+on:
+  push:
+    branches: [ui-overhaul-2026-08]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Fix and verify initial tour targets') && !contains(github.event.head_commit.message, 'Remove temporary tour verification workflow')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-overhaul-2026-08
+          fetch-depth: 1
+      - name: Restore stable tour targets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          dashboard = Path('lib/UI/dashboard.dart')
+          text = dashboard.read_text(encoding='utf-8')
+          old = """              return Expanded(\n                child: InkWell(\n                  onTap: () => _goTo(index),\n                  borderRadius: BorderRadius.circular(17),\n"""
+          new = """              return Expanded(\n                child: InkWell(\n                  key: ValueKey<String>('tour-nav-${item.label}'),\n                  onTap: () => _goTo(index),\n                  borderRadius: BorderRadius.circular(17),\n"""
+          if old not in text:
+              raise SystemExit('dashboard bottom-nav target block not found')
+          if "ValueKey<String>('tour-nav-${item.label}')" not in text:
+              text = text.replace(old, new, 1)
+          dashboard.write_text(text, encoding='utf-8')
+
+          tour = Path('lib/UI/initial_tour.dart')
+          text = tour.read_text(encoding='utf-8')
+
+          # Keep navigation targets key-based. This avoids text/icon lookups
+          # accidentally resolving widgets inside hidden IndexedStack pages.
+          required = [
+              'tour-nav-بدن',
+              'tour-nav-ورزش',
+              'tour-nav-بانوان',
+              'tour-nav-پروفایل',
+              'tour-settings-entry',
+          ]
+          for key in required:
+              if key not in text:
+                  raise SystemExit(f'missing tour key target in initial_tour.dart: {key}')
+
+          # Make the final settings target use the ProfilePage's stable GlobalKey
+          # for scrolling, then resolve the actual keyed row after it is visible.
+          old_import = "import 'profile_page.dart';\n"
+          if old_import not in text:
+              text = text.replace("import 'dashboard.dart';\n", "import 'dashboard.dart';\nimport 'profile_page.dart';\n", 1)
+
+          old_prepare = """    if (_index == _steps.length - 1) {\n      final profileState = ProfilePage.tourKey.currentState;\n      if (profileState != null) {\n        await profileState.ensureTourSettingsVisible();\n      }\n    }\n"""
+          new_prepare = """    if (_index == _steps.length - 1) {\n      final profileState = ProfilePage.tourKey.currentState;\n      if (profileState != null) {\n        await profileState.ensureTourSettingsVisible();\n      }\n      await WidgetsBinding.instance.endOfFrame;\n    }\n"""
+          if old_prepare in text:
+              text = text.replace(old_prepare, new_prepare, 1)
+
+          tour.write_text(text, encoding='utf-8')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/UI/dashboard.dart lib/UI/initial_tour.dart
+          git commit -m "Fix and verify initial tour targets"
+          git push origin ui-overhaul-2026-08
+      - name: Remove temporary tour verification workflow
+        run: |
+          git rm .github/workflows/verify-fix-tour.yml
+          git commit -m "Remove temporary tour verification workflow"
+          git push origin ui-overhaul-2026-08
