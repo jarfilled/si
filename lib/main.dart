@@ -1,22 +1,20 @@
 // lib/main.dart
 
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:monitor/UI/calibration_screen.dart';
+import 'package:monitor/UI/dashboard.dart';
+import 'package:monitor/UI/login_page.dart';
 import 'package:monitor/UI/onBoarding.dart';
+import 'package:monitor/UI/signup_page.dart';
 import 'package:monitor/UI/splashScreen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import 'UI/signup_page.dart';
-import 'UI/login_page.dart';
 import 'cam_screen.dart';
-import 'UI/calibration_screen.dart';
-import 'UI/dashboard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
 
   await Supabase.initialize(
     url: 'https://rdlxrnnvebkmldqoedpf.supabase.co',
@@ -24,7 +22,6 @@ Future<void> main() async {
   );
 
   final cameras = await availableCameras();
-
   runApp(MyApp(cameras: cameras));
 }
 
@@ -34,24 +31,14 @@ Future<void> changeDNS() async {
   try {
     await platform.invokeMethod('changeDNS');
   } on PlatformException catch (e) {
-    debugPrint(
-      "Failed to change DNS: '${e.message}'.",
-    );
+    debugPrint("Failed to change DNS: '${e.message}'.");
   }
 }
 
-// ============================================================================
-// OVERLAY ENTRY POINT
-// ============================================================================
-
-@pragma("vm:entry-point")
+@pragma('vm:entry-point')
 void overlayMain() {
   runApp(const OverlayHudApp());
 }
-
-// ============================================================================
-// OVERLAY APP
-// ============================================================================
 
 class OverlayHudApp extends StatelessWidget {
   const OverlayHudApp({super.key});
@@ -65,10 +52,6 @@ class OverlayHudApp extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// OVERLAY HUD
-// ============================================================================
-
 class OverlayHud extends StatefulWidget {
   const OverlayHud({super.key});
 
@@ -77,28 +60,15 @@ class OverlayHud extends StatefulWidget {
 }
 
 class _OverlayHudState extends State<OverlayHud> {
-  // --------------------------------------------------------------------------
-  // POSTURE HUD STATES
-  // --------------------------------------------------------------------------
-
   bool _showTooClose = false;
   bool _showNeck = false;
   bool _showWrist = false;
   bool _showHunch = false;
   bool _showLowLight = false;
-
-  // --------------------------------------------------------------------------
-  // NSFW STATE
-  // --------------------------------------------------------------------------
-
   bool _showNsfw = false;
 
-  // --------------------------------------------------------------------------
-  // NATIVE CONTROL CHANNEL
-  // --------------------------------------------------------------------------
-
   static const MethodChannel _controlChannel =
-  MethodChannel('com.example.overlay/control');
+      MethodChannel('com.example.overlay/control');
 
   @override
   void initState() {
@@ -106,312 +76,168 @@ class _OverlayHudState extends State<OverlayHud> {
     _listenForOverlayData();
   }
 
-  // ==========================================================================
-  // OVERLAY DATA LISTENER
-  // ==========================================================================
-
   void _listenForOverlayData() {
-    FlutterOverlayWindow.overlayListener.listen(
-          (dynamic data) {
-        debugPrint('[OverlayHud] RECEIVED: $data');
+    FlutterOverlayWindow.overlayListener.listen((dynamic data) {
+      if (!mounted) return;
 
-        if (!mounted) {
-          return;
+      if (data is Map) {
+        final map = Map<dynamic, dynamic>.from(data);
+        final type = map['type']?.toString();
+
+        bool readBool(String key) {
+          final value = map[key];
+          if (value is bool) return value;
+          if (value is num) return value != 0;
+          return value?.toString().toLowerCase() == 'true';
         }
 
-        // --------------------------------------------------------------------
-        // MAP DATA
-        // --------------------------------------------------------------------
+        setState(() {
+          _showTooClose = readBool('tooClose');
+          _showNeck = readBool('neck');
+          _showWrist = readBool('wrist') || readBool('wristPoor');
+          _showHunch = readBool('hunch') || readBool('hunchPoor');
+          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');
 
-        if (data is Map) {
-          final map = Map<dynamic, dynamic>.from(data);
-
-          final type = map['type']?.toString();
-
-          debugPrint('[OverlayHud] type = $type');
-
-          bool readBool(String key) {
-            final value = map[key];
-
-            if (value is bool) {
-              return value;
-            }
-
-            if (value is num) {
-              return value != 0;
-            }
-
-            return value?.toString().toLowerCase() == 'true';
+          if (type == 'nsfw') {
+            _showNsfw = true;
+          } else if (type == 'none') {
+            _showNsfw = false;
           }
+        });
+        return;
+      }
 
+      if (data is String) {
+        if (data == 'nsfw') {
+          setState(() => _showNsfw = true);
+        } else if (data == 'none') {
           setState(() {
-            // ---------------------------------------------------------------
-            // POSTURE HUD
-            // ---------------------------------------------------------------
-
-            _showTooClose = readBool('tooClose');
-
-            _showNeck = readBool('neck');
-
-            _showWrist =
-                readBool('wrist') ||
-                    readBool('wristPoor');
-
-            _showHunch =
-                readBool('hunch') ||
-                    readBool('hunchPoor');
-
-            _showLowLight =
-                readBool('lowLight') ||
-                    readBool('lowLightPoor');
-
-            // ---------------------------------------------------------------
-            // NSFW STATE
-            // ---------------------------------------------------------------
-
-            if (type == 'nsfw') {
-              debugPrint(
-                '[OverlayHud] Switching to NSFW mode',
-              );
-
-              _showNsfw = true;
-            } else if (type == 'none') {
-              debugPrint(
-                '[OverlayHud] Leaving NSFW mode',
-              );
-
-              _showNsfw = false;
-            }
+            _showNsfw = false;
+            _showTooClose = false;
+            _showNeck = false;
+            _showWrist = false;
+            _showHunch = false;
+            _showLowLight = false;
           });
-
-          return;
         }
-
-        // --------------------------------------------------------------------
-        // STRING DATA
-        // --------------------------------------------------------------------
-
-        if (data is String) {
-          debugPrint(
-            '[OverlayHud] RECEIVED STRING: $data',
-          );
-
-          if (data == 'nsfw') {
-            setState(() {
-              _showNsfw = true;
-            });
-
-            debugPrint(
-              '[OverlayHud] Switching to NSFW mode',
-            );
-          } else if (data == 'none') {
-            setState(() {
-              _showNsfw = false;
-
-              _showTooClose = false;
-              _showNeck = false;
-              _showWrist = false;
-              _showHunch = false;
-              _showLowLight = false;
-            });
-
-            debugPrint(
-              '[OverlayHud] Leaving NSFW mode',
-            );
-          }
-        }
-      },
-    );
+      }
+    });
   }
-
-  // ==========================================================================
-  // BUILD
-  // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-
       body: Stack(
         children: [
-          // ==================================================================
-          // SMALL POSTURE HUD
-          //
-          // Positioned in the TOP-RIGHT corner so it is less distracting.
-          // ==================================================================
-
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,
               child: Padding(
-                padding: const EdgeInsets.only(
-                  top: 6,
-                  right: 6,
-                ),
-
+                padding: const EdgeInsets.only(top: 6, right: 6),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-
                   children: [
                     if (_showTooClose)
-                      _indicatorCircle(
-                        Icons.remove_red_eye,
-                        Colors.orange,
-                      ),
-
+                      _indicatorCircle(Icons.remove_red_eye, Colors.orange),
                     if (_showLowLight)
-                      _indicatorCircle(
-                        Icons.light_mode,
-                        Colors.amber,
-                      ),
-
+                      _indicatorCircle(Icons.light_mode, Colors.amber),
                     if (_showNeck)
-                      _indicatorCircle(
-                        Icons.accessibility_new,
-                        Colors.blue,
-                      ),
-
+                      _indicatorCircle(Icons.accessibility_new, Colors.blue),
                     if (_showHunch)
                       _indicatorCircle(
                         Icons.airline_seat_recline_normal,
                         Colors.teal,
                       ),
-
                     if (_showWrist)
-                      _indicatorCircle(
-                        Icons.pan_tool,
-                        Colors.purple,
-                      ),
+                      _indicatorCircle(Icons.pan_tool, Colors.purple),
                   ],
                 ),
               ),
             ),
           ),
-
-          // ==================================================================
-          // NSFW WARNING
-          //
-          // This remains centered and uses the SAME overlay.
-          // ==================================================================
-
-          if (_showNsfw)
-            _buildNsfwWarning(),
+          if (_showNsfw) _buildNsfwWarning(),
         ],
       ),
     );
   }
 
-  // ==========================================================================
-  // SMALL NORMAL HUD INDICATOR
-  // ==========================================================================
-
-  Widget _indicatorCircle(
-      IconData icon,
-      Color color,
-      ) {
+  Widget _indicatorCircle(IconData icon, Color color) {
     return Container(
-      margin: const EdgeInsets.symmetric(
-        horizontal: 2,
-      ),
-
+      margin: const EdgeInsets.symmetric(horizontal: 2),
       width: 24,
       height: 24,
-
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.90),
         shape: BoxShape.circle,
       ),
-
-      child: Icon(
-        icon,
-        color: Colors.white,
-        size: 14,
-      ),
+      child: Icon(icon, color: Colors.white, size: 14),
     );
   }
 
-  // ==========================================================================
-  // NSFW WARNING
-  // ==========================================================================
-
   Widget _buildNsfwWarning() {
-    debugPrint(
-      '[OverlayHud] BUILDING NSFW WARNING',
-    );
-
     return Center(
       child: Container(
-        width: 300,
-
-        margin: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 8,
-        ),
-
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 12,
-        ),
-
+        width: 320,
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.94),
-
-          borderRadius: BorderRadius.circular(
-            18,
-          ),
-
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: Colors.redAccent.withValues(alpha: 0.85),
             width: 2,
           ),
-
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
+              color: Color(0x73000000),
               blurRadius: 16,
               spreadRadius: 2,
             ),
           ],
         ),
-
         child: Column(
           mainAxisSize: MainAxisSize.min,
-
           children: [
             Row(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.visibility_off_rounded,
                   color: Colors.redAccent,
                   size: 25,
                 ),
-
-                const SizedBox(
-                  width: 10,
-                ),
-
-                Flexible(
+                const SizedBox(width: 10),
+                const Expanded(
                   child: Text(
                     'محتوای نامناسب شناسایی شد',
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: IconButton(
+                    onPressed: _dismissNsfw,
+                    tooltip: 'بستن',
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white70,
+                      size: 24,
+                    ),
+                  ),
+                ),
               ],
             ),
-
-            const SizedBox(
-              height: 7,
-            ),
-
+            const SizedBox(height: 5),
             const Text(
               'برای ادامه استفاده ایمن، به برنامه بازگردید.',
               textAlign: TextAlign.center,
@@ -423,34 +249,22 @@ class _OverlayHudState extends State<OverlayHud> {
                 height: 1.25,
               ),
             ),
-
-            const SizedBox(
-              height: 9,
-            ),
-
+            const SizedBox(height: 10),
             SizedBox(
-              height: 34,
-              width: 150,
-
+              height: 36,
+              width: 170,
               child: ElevatedButton(
                 onPressed: _dismissNsfw,
-
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.zero,
-
                   minimumSize: Size.zero,
-
-                  tapTargetSize:
-                  MaterialTapTargetSize.shrinkWrap,
-
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(
-                    borderRadius:
-                    BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-
                 child: const Text(
-                  'بازگشت به برنامه',
+                  'ادامه در برنامه',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -464,153 +278,67 @@ class _OverlayHudState extends State<OverlayHud> {
     );
   }
 
-  // ==========================================================================
-  // DISMISS NSFW WARNING
-  // ==========================================================================
-
   Future<void> _dismissNsfw() async {
-    debugPrint(
-      '[OverlayHud] Dismissing NSFW warning',
-    );
-
     try {
-      // ----------------------------------------------------------------------
-      // DO NOT CLOSE THE OVERLAY.
-      //
-      // The same overlay is also responsible for the posture HUD.
-      // We only tell it that NSFW mode has ended.
-      // ----------------------------------------------------------------------
-
-      if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.shareData({
-          'type': 'none',
-        });
-      }
-
-      // ----------------------------------------------------------------------
-      // Tell the native detector to resume.
-      // ----------------------------------------------------------------------
-
-      await _controlChannel.invokeMethod(
-        'resumeDetection',
-      );
+      // Overlay shutdown is centralized in the detector/controller isolate.
+      await _controlChannel.invokeMethod('resumeDetection');
 
       if (mounted) {
-        setState(() {
-          _showNsfw = false;
-        });
+        setState(() => _showNsfw = false);
       }
     } catch (e) {
-      debugPrint(
-        '[OverlayHud] Error dismissing NSFW warning: $e',
-      );
+      debugPrint('[OverlayHud] Error dismissing NSFW warning: $e');
     }
   }
 }
 
-// ============================================================================
-// MAIN APPLICATION
-// ============================================================================
-
 class MyApp extends StatelessWidget {
   final List<CameraDescription> cameras;
 
-  const MyApp({
-    Key? key,
-    required this.cameras,
-  }) : super(key: key);
+  const MyApp({super.key, required this.cameras});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Vibrant Auth',
-
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
-        fontFamily: "Vazirmatn",
-
-        inputDecorationTheme:
-        const InputDecorationTheme(
+        fontFamily: 'Vazirmatn',
+        inputDecorationTheme: const InputDecorationTheme(
           filled: true,
-
           fillColor: Colors.white24,
-
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(
-              Radius.circular(16),
-            ),
-
+            borderRadius: BorderRadius.all(Radius.circular(16)),
             borderSide: BorderSide.none,
           ),
-
-          hintStyle: TextStyle(
-            color: Colors.white70,
-          ),
+          hintStyle: TextStyle(color: Colors.white70),
         ),
-
-        textButtonTheme:
-        TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
-          ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: Colors.white),
         ),
-
-        elevatedButtonTheme:
-        ElevatedButtonThemeData(
+        elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(
-              vertical: 16,
-              horizontal: 64,
-            ),
-
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 64),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                30,
-              ),
+              borderRadius: BorderRadius.circular(30),
             ),
-
             elevation: 8,
           ),
         ),
       ),
-
       initialRoute: '/login',
-
       routes: {
         '/signup': (_) => const SignupPage(),
-
         '/login': (_) => LoginPage(),
-
-        '/cam': (_) => CamScreen(
-          cameras: cameras,
-        ),
-
-        '/calibrate': (_) =>
-            CalibrationScreen(
-              cameras: cameras,
-            ),
-
+        '/cam': (_) => CamScreen(cameras: cameras),
+        '/calibrate': (_) => CalibrationScreen(cameras: cameras),
         '/dashboard': (context) {
-          final args =
-              ModalRoute.of(context)
-                  ?.settings
-                  .arguments;
-
-          final gender =
-          (args is String)
-              ? args
-              : 'male';
-
-          return MainNavigationScreen(
-            userGender: gender,
-          );
+          final args = ModalRoute.of(context)?.settings.arguments;
+          final gender = args is String ? args : 'male';
+          return MainNavigationScreen(userGender: gender);
         },
-
         '/splash': (_) => SplashScreen(),
-
-        '/onboarding': (_) =>
-            OnBoardingPage(),
+        '/onboarding': (_) => OnBoardingPage(),
       },
     );
   }
