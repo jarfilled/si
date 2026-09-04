@@ -1,8 +1,11 @@
 name: Internal women sharing PR patch
 
 on:
+  push:
+    branches:
+      - womens-sharing-integration-2026-09
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
 
 permissions:
   contents: write
@@ -10,7 +13,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.pull_request.head.ref == 'womens-sharing-integration-2026-09'
+    if: github.ref == 'refs/heads/womens-sharing-integration-2026-09' || github.event.pull_request.head.ref == 'womens-sharing-integration-2026-09'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,5 +86,9 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add lib/UI/womens_health_page.dart
           git rm .github/workflows/internal-womens-sharing-pr-patch.yml
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
           git commit -m "Integrate women health daily sharing"
           git push origin womens-sharing-integration-2026-09
