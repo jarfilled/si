@@ -1,40 +1,39 @@
 from pathlib import Path
 
 
-def replace_once(text: str, old: str, new: str, label: str) -> str:
+def require_replace(text: str, old: str, new: str, label: str) -> str:
     if new in text:
         return text
     if old not in text:
-        raise RuntimeError(f'{label}: marker not found')
+        raise RuntimeError(f'{label}: expected source marker was not found')
     return text.replace(old, new, 1)
 
 
+# ---------------------------------------------------------------------------
 # background_service.dart
+# ---------------------------------------------------------------------------
 p = Path('lib/services/background_service.dart')
 s = p.read_text(encoding='utf-8')
 
-# The original patch placed these local helpers before the declarations they
-# reference. Move only that helper block to the overlay-helper section.
+# 1) The helper block must come after overlayState/updateWarningState/
+# queueOverlayUpdate so its local references are in scope.
 start = s.find('  final pendingOverlayTimers = <String, Timer?>{};')
-overlay_decl = s.find('  final overlayState =\n  <String, dynamic>{')
-if start >= 0 and overlay_decl > start:
-    helper_block = s[start:overlay_decl]
-    s = s[:start] + s[overlay_decl:]
-    marker = '  // ==========================================================================\n  // OVERLAY FLAG\n  // ==========================================================================\n'
+end = s.find('  final overlayState =', start if start >= 0 else 0)
+marker = '  // ==========================================================================\n  // OVERLAY FLAG\n  // ==========================================================================\n'
+
+if start >= 0 and end > start:
+    helper_block = s[start:end]
+    if 'void _setOverlayWarningDebounced' not in helper_block:
+        raise RuntimeError('PDS helper block is incomplete')
+    s = s[:start] + s[end:]
     if marker not in s:
-        raise RuntimeError('overlay flag marker not found')
+        raise RuntimeError('overlay flag marker not found after helper extraction')
     s = s.replace(marker, helper_block + '\n' + marker, 1)
+else:
+    if 'void _setOverlayWarningDebounced' not in s:
+        raise RuntimeError('PDS debounce helpers are missing')
 
-# Ensure user-not-detected can drive the overlay HUD by itself.
-s = replace_once(
-    s,
-    """    return overlayState['tooClose'] == true;
-""",
-    """    return overlayState['tooClose'] == true;
-""",
-    'noop safety marker',
-) if "overlayState['tooClose'] == true;\n" in s else s
-
+# 2) User-not-detected must keep the HUD alive so person-off icon can be shown.
 old = """    return overlayState['tooClose'] == true ||
         overlayState['neck'] == true ||
         overlayState['wrist'] == true ||
@@ -46,10 +45,9 @@ new = """    return overlayState['tooClose'] == true ||
         overlayState['hunch'] == true ||
         overlayState['lowLight'] == true ||
         overlayState['userNotDetected'] == true;"""
-if old in s:
-    s = s.replace(old, new, 1)
+s = require_replace(s, old, new, 'hasActiveWarning')
 
-# Ensure shutdown cannot leave debounce/watchdog timers running.
+# 3) No watchdog/debounce timers may survive shutdown.
 old = """    pushTimer?.cancel();
     emailTimer?.cancel();
 
@@ -64,12 +62,13 @@ new = """    pushTimer?.cancel();
     pendingOverlayTimers.clear();
 
     syncService.dispose();"""
-if old in s:
-    s = s.replace(old, new, 1)
+s = require_replace(s, old, new, 'shutdown timers')
 
 p.write_text(s, encoding='utf-8')
 
-# main.dart: clear the user-not-detected icon on a raw "none" event.
+# ---------------------------------------------------------------------------
+# main.dart
+# ---------------------------------------------------------------------------
 p = Path('lib/main.dart')
 s = p.read_text(encoding='utf-8')
 old = """            _showHunch = false;
@@ -79,17 +78,37 @@ new = """            _showHunch = false;
             _showLowLight = false;
             _showUserNotDetected = false;
           });"""
-if old in s:
-    s = s.replace(old, new, 1)
+s = require_replace(s, old, new, "OverlayHud raw 'none' reset")
 p.write_text(s, encoding='utf-8')
 
-# Settings should display monitoring as enabled until the user explicitly turns
-# it off; preserve an existing explicit false preference.
+# ---------------------------------------------------------------------------
+# settings_page.dart
+# ---------------------------------------------------------------------------
 p = Path('lib/UI/settings_page.dart')
 s = p.read_text(encoding='utf-8')
-s = s.replace(
-    "prefs.getBool('monitoring_enabled') ?? false",
-    "prefs.getBool('monitoring_enabled') ?? true",
-    1,
-)
+old = "prefs.getBool('monitoring_enabled') ?? false"
+new = "prefs.getBool('monitoring_enabled') ?? true"
+s = s.replace(old, new, 1)
 p.write_text(s, encoding='utf-8')
+
+# Final assertions: never report success unless all four fixes are actually in
+# the working tree.
+bg = Path('lib/services/background_service.dart').read_text(encoding='utf-8')
+main = Path('lib/main.dart').read_text(encoding='utf-8')
+settings = Path('lib/UI/settings_page.dart').read_text(encoding='utf-8')
+
+required_bg = [
+    'const _overlayShowDelay = Duration(milliseconds: 500);',
+    'const _overlayHideDelay = Duration(milliseconds: 300);',
+    'const _postureDetectionTimeout = Duration(milliseconds: 1500);',
+    "overlayState['userNotDetected'] == true;",
+    'postureDetectionWatchdog?.cancel();',
+]
+for needle in required_bg:
+    if needle not in bg:
+        raise RuntimeError(f'Final PDS assertion failed: {needle}')
+
+if '_showUserNotDetected = false;' not in main:
+    raise RuntimeError("Final PDS assertion failed: missing HUD 'none' reset")
+if "prefs.getBool('monitoring_enabled') ?? true" not in settings:
+    raise RuntimeError('Final PDS assertion failed: monitoring default is not true')
