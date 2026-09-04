@@ -247,28 +247,6 @@ class _OverlayHudState extends State<OverlayHud> {
               ),
             ),
             const SizedBox(height: 10),
-            SizedBox(
-              height: 36,
-              width: 170,
-              child: ElevatedButton(
-                onPressed: _dismissNsfw,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'ادامه در برنامه',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -325,7 +303,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/login',
+      initialRoute: '/splash',
       routes: {
         '/signup': (_) => const SignupPage(),
         '/login': (_) => LoginPage(),
