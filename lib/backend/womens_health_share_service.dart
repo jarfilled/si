@@ -115,21 +115,22 @@ class WomensHealthShareService {
         ? 'سلام'
         : 'سلام ${recipientName.trim()}';
 
-    return StringBuffer()
-      ..writeln(greeting)
-      ..writeln()
-      ..writeln('گزارش روزانه سلامت زنان')
-      ..writeln(
-        'تاریخ: ${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}',
-      )
-      ..writeln()
-      ..writeln('میزان درد: $pain از ۱۰')
-      ..writeln('خلق‌وخو: $mood از ۵ (${_moodLabel(mood)})')
-      ..writeln()
-      ..writeln(
-        'این گزارش با اجازه کاربر و از داخل اپ سی ثبت و ارسال شده است.',
-      )
-      .toString();
+    final buffer = StringBuffer();
+    buffer.writeln(greeting);
+    buffer.writeln();
+    buffer.writeln('گزارش روزانه سلامت زنان');
+    buffer.writeln(
+      'تاریخ: ${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}',
+    );
+    buffer.writeln();
+    buffer.writeln('میزان درد: $pain از ۱۰');
+    buffer.writeln('خلق‌وخو: $mood از ۵ (${_moodLabel(mood)})');
+    buffer.writeln();
+    buffer.writeln(
+      'این گزارش با اجازه کاربر و از داخل اپ سی ثبت و ارسال شده است.',
+    );
+
+    return buffer.toString();
   }
 
   static String _moodLabel(int mood) {
