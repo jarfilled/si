@@ -1,15 +1,16 @@
-name: Improve PDS stability
+name: Apply PDS stability changes
 
 on:
   push:
-    branches: [ui-overhaul-2026-08]
+    branches:
+      - ui-overhaul-2026-08
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: "!contains(github.event.head_commit.message, 'Apply PDS stability changes') && !contains(github.event.head_commit.message, 'Remove temporary PDS workflow')"
+    if: "!contains(github.event.head_commit.message, 'Apply PDS stability changes')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,92 +18,67 @@ jobs:
           ref: ui-overhaul-2026-08
           fetch-depth: 1
 
-      - name: Patch PDS service
+      - name: Patch Dart files
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
+          # ---------------------------------------------------------------
+          # background_service.dart
+          # ---------------------------------------------------------------
           p = Path('lib/services/background_service.dart')
-          text = p.read_text(encoding='utf-8')
+          s = p.read_text(encoding='utf-8')
 
-          # 1) Add timing constants.
-          marker = "const double _lowLightThresholdLux = 100.0;"
-          addition = """const double _lowLightThresholdLux = 100.0;
+          if '_overlayShowDelay' not in s:
+              s = s.replace(
+                  'const double _lowLightThresholdLux = 100.0;',
+                  """const double _lowLightThresholdLux = 100.0;
 
-          // Overlay presentation is intentionally slower than raw detection.
-          // A warning must persist for at least 500 ms before appearing.
-          // Once visible, it gets a short release grace period to avoid flicker.
-          const _overlayShowDelay = Duration(milliseconds: 500);
-          const _overlayHideDelay = Duration(milliseconds: 300);
-          const _postureDetectionTimeout = Duration(milliseconds: 1500);"""
-          if marker not in text:
-              raise SystemExit('threshold marker not found')
-          text = text.replace(marker, addition, 1)
+const _overlayShowDelay = Duration(milliseconds: 500);
+const _overlayHideDelay = Duration(milliseconds: 300);
+const _postureDetectionTimeout = Duration(milliseconds: 1500);""",
+                  1,
+              )
 
-          # 2) Default the service's monitoring mode to passive only for the
-          # presentation mode. The PDS itself is separately made enabled by
-          # default in the dashboard/settings logic below.
+          if 'bool userNotDetected = false;' not in s:
+              s = s.replace(
+                  "  bool nsfwOverlayActive = false;\n\n  String monitoringMode = 'passive';",
+                  """  bool nsfwOverlayActive = false;
 
-          # 3) Replace the service-state block with detection/watchdog state.
-          old_state = """  bool stopped = false;
-  bool nsfwOverlayActive = false;
-
-  String monitoringMode = 'passive';
-
-  bool monitoringSoundEnabled =
-  true;"""
-          new_state = """  bool stopped = false;
-  bool nsfwOverlayActive = false;
-
-  // True only when the camera-based posture detector cannot currently
-  // establish a user. Posture warnings must never survive this state.
   bool userNotDetected = false;
-
   DateTime? lastNeckSignalAt;
   DateTime? lastHunchSignalAt;
   Timer? postureDetectionWatchdog;
 
-  String monitoringMode = 'passive';
+  String monitoringMode = 'passive';""",
+                  1,
+              )
 
-  bool monitoringSoundEnabled =
-  true;"""
-          if old_state not in text:
-              raise SystemExit('service state marker not found')
-          text = text.replace(old_state, new_state, 1)
+          if 'final pendingOverlayTimers' not in s:
+              marker = "  final overlayState =\n  <String, dynamic>{"
+              helpers = r'''  final pendingOverlayTimers = <String, Timer?>{};
 
-          # 4) Add overlay debounce/watchdog helpers immediately before the
-          # existing overlay-state declaration.
-          marker = """  final overlayState =
-  <String, dynamic>{"""
-          insertion = """  // Pending overlay transitions. Raw detector state is kept separate
-  // from visual presentation so a single noisy frame cannot flash the HUD.
-  final pendingOverlayTimers = <String, Timer?>{};
-
-  void cancelPendingOverlayTimer(String key) {
+  void _cancelPendingOverlayTimer(String key) {
     pendingOverlayTimers[key]?.cancel();
     pendingOverlayTimers[key] = null;
   }
 
   bool _readUserDetected(Map<dynamic, dynamic> data) {
-    const notDetectedKeys = <String>[
+    for (final key in const [
       'userNotDetected',
       'user_not_detected',
       'notDetected',
       'not_detected',
       'noUser',
       'no_user',
-    ];
-
-    for (final key in notDetectedKeys) {
+    ]) {
       final value = data[key];
-      if (value is bool) {
-        return !value;
-      }
+      if (value is bool) return !value;
     }
 
-    const detectedKeys = <String>[
+    for (final key in const [
       'userDetected',
       'user_detected',
       'detected',
@@ -112,33 +88,26 @@ jobs:
       'pose_detected',
       'hasUser',
       'has_user',
-    ];
-
-    for (final key in detectedKeys) {
+    ]) {
       final value = data[key];
-      if (value is bool) {
-        return value;
-      }
+      if (value is bool) return value;
     }
 
     final status = data['status']?.toString().trim().toLowerCase();
-    if (status != null) {
-      const lostStatuses = <String>{
-        'not_detected',
-        'not detected',
-        'undetected',
-        'no_user',
-        'no user',
-        'no_person',
-        'no person',
-        'no_pose',
-        'no pose',
-        'lost',
-        'missing',
-      };
-      if (lostStatuses.contains(status)) {
-        return false;
-      }
+    if (status != null && const {
+      'not_detected',
+      'not detected',
+      'undetected',
+      'no_user',
+      'no user',
+      'no_person',
+      'no person',
+      'no_pose',
+      'no pose',
+      'lost',
+      'missing',
+    }.contains(status)) {
+      return false;
     }
 
     return true;
@@ -147,23 +116,17 @@ jobs:
   void _clearCameraWarningsForLostUser() {
     for (final type in const ['neck', 'hunch', 'tooClose']) {
       updateWarningState(type, false);
-      cancelPendingOverlayTimer(type);
+      _cancelPendingOverlayTimer(type);
       overlayState[type] = false;
     }
 
     unawaited(metrics.stop('neck'));
     unawaited(metrics.stop('hunch'));
     unawaited(metrics.stop('tooClose'));
-
-    overlayState['neck'] = false;
-    overlayState['hunch'] = false;
-    overlayState['tooClose'] = false;
   }
 
   void _setUserNotDetected(bool value) {
-    if (userNotDetected == value) {
-      return;
-    }
+    if (userNotDetected == value) return;
 
     userNotDetected = value;
     overlayState['userNotDetected'] = value;
@@ -177,6 +140,7 @@ jobs:
 
   void _startPostureDetectionWatchdog() {
     postureDetectionWatchdog?.cancel();
+
     postureDetectionWatchdog = Timer.periodic(
       const Duration(milliseconds: 500),
       (_) {
@@ -188,9 +152,6 @@ jobs:
         final hunchStale = lastHunchSignalAt == null ||
             now.difference(lastHunchSignalAt!) > _postureDetectionTimeout;
 
-        // We only declare the camera user missing when both camera posture
-        // channels have stopped reporting. This avoids one stream starving
-        // the other from keeping a valid session alive.
         if (neckStale && hunchStale) {
           _setUserNotDetected(true);
         }
@@ -198,25 +159,21 @@ jobs:
     );
   }
 
-  // Debounce only the visual flags. Metrics/audio continue to reflect the
-  // detector immediately, while the HUD requires persistence.
   void _setOverlayWarningDebounced(String key, bool value) {
     final current = overlayState[key] == true;
 
     if (current == value) {
-      cancelPendingOverlayTimer(key);
+      _cancelPendingOverlayTimer(key);
       return;
     }
 
-    cancelPendingOverlayTimer(key);
+    _cancelPendingOverlayTimer(key);
 
     pendingOverlayTimers[key] = Timer(
       value ? _overlayShowDelay : _overlayHideDelay,
       () {
         pendingOverlayTimers[key] = null;
-
         if (stopped) return;
-
         overlayState[key] = value;
         queueOverlayUpdate();
       },
@@ -224,55 +181,32 @@ jobs:
   }
 
   final overlayState =
-  <String, dynamic>{"""
-          if marker not in text:
-              raise SystemExit('overlay state marker not found')
-          text = text.replace(marker, insertion, 1)
+  <String, dynamic>{'''
+              if marker not in s:
+                  raise SystemExit('overlay state marker missing')
+              s = s.replace(marker, helpers, 1)
 
-          # Add the visual user-not-detected field to the overlay state.
-          needle = """    'lowLight': false,
-    'wristTilt': 0.0,"""
-          replacement = """    'lowLight': false,
-    'userNotDetected': false,
-    'wristTilt': 0.0,"""
-          if needle not in text:
-              raise SystemExit('overlay-state field marker not found')
-          text = text.replace(needle, replacement, 1)
+          if "'userNotDetected': false," not in s:
+              marker = "    'lowLight': false,\n    'wristTilt': 0.0,"
+              if marker not in s:
+                  raise SystemExit('overlay state fields missing')
+              s = s.replace(marker, "    'lowLight': false,\n    'userNotDetected': false,\n    'wristTilt': 0.0,", 1)
 
-          # 5) Replace setOverlayFlag so booleans are debounced while telemetry
-          # values remain live.
-          start = text.index("  void setOverlayFlag(")
-          end = text.index("\n  // ==========================================================================\n  // SHUTDOWN", start)
-          new_method = r'''  void setOverlayFlag(
+          start = s.index('  void setOverlayFlag(')
+          end = s.index('\n  // ==========================================================================\n  // SHUTDOWN', start)
+          s = s[:start] + '''  void setOverlayFlag(
       String key,
       bool value, {
         double? wristTilt,
         double? hunchRatio,
         double? lightLux,
       }) {
-    final wristChanged =
-        wristTilt != null && overlayState['wristTilt'] != wristTilt;
-
-    final hunchChanged =
-        hunchRatio != null && overlayState['hunchRatio'] != hunchRatio;
-
-    final lightChanged =
-        lightLux != null && overlayState['lightLux'] != lightLux;
-
-    if (wristTilt != null) {
-      overlayState['wristTilt'] = wristTilt;
-    }
-
-    if (hunchRatio != null) {
-      overlayState['hunchRatio'] = hunchRatio;
-    }
-
-    if (lightLux != null) {
-      overlayState['lightLux'] = lightLux;
-    }
+    if (wristTilt != null) overlayState['wristTilt'] = wristTilt;
+    if (hunchRatio != null) overlayState['hunchRatio'] = hunchRatio;
+    if (lightLux != null) overlayState['lightLux'] = lightLux;
 
     if (key == 'userNotDetected') {
-      cancelPendingOverlayTimer(key);
+      _cancelPendingOverlayTimer(key);
       overlayState[key] = value;
       queueOverlayUpdate();
       return;
@@ -291,49 +225,38 @@ jobs:
       return;
     }
 
-    if (wristChanged || hunchChanged || lightChanged) {
-      queueOverlayUpdate();
-    }
+    queueOverlayUpdate();
   }
-'''
-          text = text[:start] + new_method + text[end:]
+''' + s[end:]
 
-          # 6) Ensure shutdown cancels the new timers.
-          needle = """    pushTimer?.cancel();
-    emailTimer?.cancel();"""
-          replacement = """    pushTimer?.cancel();
+          if 'postureDetectionWatchdog?.cancel();' not in s:
+              needle = "    pushTimer?.cancel();\n    emailTimer?.cancel();"
+              repl = """    pushTimer?.cancel();
     emailTimer?.cancel();
     postureDetectionWatchdog?.cancel();
-
     for (final timer in pendingOverlayTimers.values) {
       timer?.cancel();
     }
     pendingOverlayTimers.clear();"""
-          if needle not in text:
-              raise SystemExit('shutdown timer marker not found')
-          text = text.replace(needle, replacement, 1)
+              if needle not in s:
+                  raise SystemExit('shutdown timers marker missing')
+              s = s.replace(needle, repl, 1)
 
-          # 7) Add watchdog startup after the stream subscriptions section is
-          # complete, just before network sync begins.
-          needle = """  // ==========================================================================\n  // NETWORK SYNC\n  // ==========================================================================\n\n  syncService.start();"""
-          replacement = """  // ==========================================================================\n  // POSTURE DETECTION WATCHDOG\n  // ==========================================================================\n\n  _startPostureDetectionWatchdog();\n\n  // ==========================================================================\n  // NETWORK SYNC\n  // ==========================================================================\n\n  syncService.start();"""
-          if needle not in text:
-              raise SystemExit('network sync marker not found')
-          text = text.replace(needle, replacement, 1)
+          if '_startPostureDetectionWatchdog();' not in s:
+              m = re.search(r"(?m)^(\s*)syncService\.start\(\);", s)
+              if not m:
+                  raise SystemExit('syncService.start marker missing')
+              indent = m.group(1)
+              s = s[:m.start()] + indent + '_startPostureDetectionWatchdog();\n\n' + s[m.start():]
 
-          # 8) Camera posture stream: record heartbeat + explicitly handle
-          # user-not-detected payloads before interpreting posture.
-          old = """          final data =
+          if 'lastNeckSignalAt = DateTime.now();' not in s:
+              needle = """          final data =
           Map<dynamic, dynamic>.from(
             raw,
           );
 
-          final status =
-              data['status']
-                  ?.toString()
-                  .toLowerCase() ??
-                  'good';"""
-          new = """          final data =
+          final status ="""
+              repl = """          final data =
           Map<dynamic, dynamic>.from(
             raw,
           );
@@ -344,29 +267,21 @@ jobs:
             _setUserNotDetected(true);
             return;
           }
+          if (userNotDetected) _setUserNotDetected(false);
 
-          if (userNotDetected) {
-            _setUserNotDetected(false);
-          }
+          final status ="""
+              if needle not in s:
+                  raise SystemExit('neck stream marker missing')
+              s = s.replace(needle, repl, 1)
 
-          final status =
-              data['status']
-                  ?.toString()
-                  .toLowerCase() ??
-                  'good';"""
-          if old not in text:
-              raise SystemExit('neck stream marker not found')
-          text = text.replace(old, new, 1)
-
-          # Hunch stream: same lost-user semantics.
-          old = """          final data =
+          if 'lastHunchSignalAt = DateTime.now();' not in s:
+              needle = """          final data =
           Map<dynamic, dynamic>.from(
             raw,
           );
 
-          final isHunching =
-              data['is_hunching'] == true ||"""
-          new = """          final data =
+          final isHunching ="""
+              repl = """          final data =
           Map<dynamic, dynamic>.from(
             raw,
           );
@@ -377,131 +292,56 @@ jobs:
             _setUserNotDetected(true);
             return;
           }
+          if (userNotDetected) _setUserNotDetected(false);
 
-          if (userNotDetected) {
-            _setUserNotDetected(false);
-          }
+          final isHunching ="""
+              if needle not in s:
+                  raise SystemExit('hunch stream marker missing')
+              s = s.replace(needle, repl, 1)
 
-          final isHunching =
-              data['is_hunching'] == true ||"""
-          if old not in text:
-              raise SystemExit('hunch stream marker not found')
-          text = text.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
 
-          # Do not treat stale camera state as active after a stream error.
-          # The existing error handlers already clear individual warnings.
-          p.write_text(text, encoding='utf-8')
-
-          # 9) Patch the default monitoring mode in settings is done separately.
-
-          # 10) Ensure user-not-detected is included in status telemetry.
-          p2 = Path('lib/services/background_service.dart')
-          text = p2.read_text(encoding='utf-8')
-          text = text.replace(
-              """              'monitoringSoundEnabled':
-              monitoringSoundEnabled,
-            },""",
-              """              'monitoringSoundEnabled':
-              monitoringSoundEnabled,
-
-              'userNotDetected':
-              userNotDetected,
-            },""",
-              1,
-          )
-          text = text.replace(
-              """          'monitoringSoundEnabled':
-          monitoringSoundEnabled,
-        },""",
-              """          'monitoringSoundEnabled':
-          monitoringSoundEnabled,
-
-          'userNotDetected':
-          userNotDetected,
-        },""",
-              1,
-          )
-          p2.write_text(text, encoding='utf-8')
-          PY
-
-      - name: Patch default monitoring startup
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          # Dashboard is the first stable post-login surface. Start PDS by
-          # default only when calibration and camera permission are available;
-          # an explicit off choice remains respected.
+          # ---------------------------------------------------------------
+          # dashboard.dart
+          # ---------------------------------------------------------------
           p = Path('lib/UI/dashboard.dart')
-          text = p.read_text(encoding='utf-8')
+          s = p.read_text(encoding='utf-8')
 
-          if "../services/app_permission_manager.dart" not in text:
-              text = text.replace(
-                  "import '../services/background_service.dart';\n",
-                  "import '../services/app_permission_manager.dart';\nimport '../services/background_service.dart';\n",
-                  1,
-              )
-
-          if "const _cameraChannel = 'com.s_health/camera_control';" not in text:
+          if "import 'package:flutter/services.dart';" not in s:
+              s = s.replace("import 'package:flutter/material.dart';\n", "import 'package:flutter/material.dart';\nimport 'package:flutter/services.dart';\n", 1)
+          if "import '../services/app_permission_manager.dart';" not in s:
+              s = s.replace("import '../services/background_service.dart';\n", "import '../services/app_permission_manager.dart';\nimport '../services/background_service.dart';\n", 1)
+          if "static const _cameraChannel = 'com.s_health/camera_control';" not in s:
               marker = "  static const Color subtext = Color(0xFF7D8D89);\n"
-              text = text.replace(
-                  marker,
-                  marker + "  static const _cameraChannel = 'com.s_health/camera_control';\n",
-                  1,
-              )
-
-          old = """    _listenToService();
-    _refreshMonitoringState();"""
-          new = """    _listenToService();
-    _refreshMonitoringState();
-    _ensureDefaultMonitoring();"""
-          if old not in text:
-              raise SystemExit('dashboard init marker not found')
-          text = text.replace(old, new, 1)
-
-          marker = """  void _goTo(int index) {"""
-          helper = r'''  Future<void> _ensureDefaultMonitoring() async {
+              if marker not in s: raise SystemExit('dashboard color marker missing')
+              s = s.replace(marker, marker + "  static const _cameraChannel = 'com.s_health/camera_control';\n", 1)
+          if '_ensureDefaultMonitoring();' not in s:
+              marker = "    _refreshMonitoringState();\n"
+              if marker not in s: raise SystemExit('dashboard startup marker missing')
+              s = s.replace(marker, marker + "    _ensureDefaultMonitoring();\n", 1)
+          if 'Future<void> _ensureDefaultMonitoring() async' not in s:
+              marker = "  void _goTo(int index) {"
+              helper = r'''  Future<void> _ensureDefaultMonitoring() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
 
       final configured = prefs.getBool('monitoring_enabled');
-
-      // A missing preference means a fresh install/new user. Enable PDS by
-      // default, but preserve an explicit false chosen by the user.
-      if (configured == false) {
-        return;
-      }
-
-      if (configured == null) {
-        await prefs.setBool('monitoring_enabled', true);
-      }
+      if (configured == false) return;
 
       final divisor = prefs.getDouble('hunch_divisor');
-      if (divisor == null || !divisor.isFinite || divisor <= 0) {
-        // Calibration has not happened yet. The preference stays enabled and
-        // the service will be started when the app has a usable divisor.
-        return;
-      }
+      if (divisor == null || !divisor.isFinite || divisor <= 0) return;
+      if (await BackgroundMonitorService.isRunning) return;
 
-      if (await BackgroundMonitorService.isRunning) {
-        return;
-      }
-
-      final permissions =
+      final granted =
           await AppPermissionManager.ensureMonitoringPermissions();
-      if (!permissions) {
-        return;
-      }
+      if (!granted) return;
 
       const channel = MethodChannel(_cameraChannel);
-
       await channel.invokeMethod(
         'saveHunchDivisor',
         {'hunch_divisor': divisor},
       );
-
       await channel.invokeMethod(
         'startCamera',
         {'hunch_divisor': divisor},
@@ -509,119 +349,72 @@ jobs:
 
       await BackgroundMonitorService.initialize();
       BackgroundMonitorService.start();
+      await prefs.setBool('monitoring_enabled', true);
 
       if (mounted) {
         setState(() => serviceAlive = true);
       }
     } catch (e, stackTrace) {
-      debugPrint('[Dashboard] Default monitoring startup failed: $e');
+      debugPrint('[Dashboard] Default PDS startup failed: $e');
       debugPrintStack(stackTrace: stackTrace);
     }
   }
 
 '''
-          if marker not in text:
-              raise SystemExit('dashboard goTo marker not found')
-          text = text.replace(marker, helper + marker, 1)
+              if marker not in s: raise SystemExit('dashboard insertion marker missing')
+              s = s.replace(marker, helper + marker, 1)
 
-          # Keep the existing explanatory comments accurate.
-          text = text.replace(
-              """    // We ONLY observe the monitoring service here.
-    //
-    // IMPORTANT:
-    // There is deliberately NO automatic monitoring startup.
-    // Opening the dashboard will not:
-    // - request camera permission
-    // - request notification permission
-    // - request overlay permission
-    // - check calibration
-    // - initialize the background service
-    // - start the background service
-    //
-    // Monitoring must be explicitly started elsewhere by the user.
+          p.write_text(s, encoding='utf-8')
 
-""",
-              """    // The PDS is enabled by default for a fresh setup, but an explicit
-    // user choice of OFF is always respected. Startup waits until calibration
-    // and camera permission are available.
+          # ---------------------------------------------------------------
+          # settings_page.dart
+          # ---------------------------------------------------------------
+          p = Path('lib/UI/settings_page.dart')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace("prefs.getBool('monitoring_enabled') ?? false", "prefs.getBool('monitoring_enabled') ?? true", 1)
+          p.write_text(s, encoding='utf-8')
 
-""",
-              1,
-          )
-
-          p.write_text(text, encoding='utf-8')
-          PY
-
-      - name: Patch overlay UI
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
+          # ---------------------------------------------------------------
+          # main.dart
+          # ---------------------------------------------------------------
           p = Path('lib/main.dart')
-          text = p.read_text(encoding='utf-8')
-
-          marker = """  bool _showLowLight = false;
-  bool _showNsfw = false;"""
-          replacement = """  bool _showLowLight = false;
-  bool _showUserNotDetected = false;
-  bool _showNsfw = false;"""
-          if marker not in text:
-              raise SystemExit('overlay state marker not found')
-          text = text.replace(marker, replacement, 1)
-
-          old = """          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');
-
-          if (type == 'nsfw') {"""
-          new = """          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');
-          _showUserNotDetected = readBool('userNotDetected');
-
-          if (type == 'nsfw') {"""
-          if old not in text:
-              raise SystemExit('overlay listener marker not found')
-          text = text.replace(old, new, 1)
-
-          old = """                    if (_showWrist)
+          s = p.read_text(encoding='utf-8')
+          if 'bool _showUserNotDetected = false;' not in s:
+              s = s.replace("  bool _showLowLight = false;\n", "  bool _showLowLight = false;\n  bool _showUserNotDetected = false;\n", 1)
+          if "_showUserNotDetected = readBool('userNotDetected');" not in s:
+              s = s.replace("          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');\n", "          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');\n          _showUserNotDetected = readBool('userNotDetected');\n", 1)
+          if 'Icons.person_off_outlined' not in s:
+              marker = """                    if (_showWrist)
                       _indicatorCircle(Icons.pan_tool, Colors.purple),
 """
-          new = """                    if (_showWrist)
+              repl = """                    if (_showWrist)
                       _indicatorCircle(Icons.pan_tool, Colors.purple),
                     if (_showUserNotDetected)
-                      _indicatorCircle(Icons.person_off_outlined, Colors.blueGrey),
+                      _indicatorCircle(
+                        Icons.person_off_outlined,
+                        Colors.blueGrey,
+                      ),
 """
-          if old not in text:
-              raise SystemExit('overlay indicator marker not found')
-          text = text.replace(old, new, 1)
-
-          old = """            _showLowLight = false;
-          });"""
-          new = """            _showLowLight = false;
-            _showUserNotDetected = false;
-          });"""
-          if old not in text:
-              raise SystemExit('overlay reset marker not found')
-          text = text.replace(old, new, 1)
-
-          p.write_text(text, encoding='utf-8')
+              if marker not in s: raise SystemExit('main overlay indicator marker missing')
+              s = s.replace(marker, repl, 1)
+          p.write_text(s, encoding='utf-8')
           PY
 
-      - name: Verify changes
+      - name: Verify
         shell: bash
         run: |
-          grep -q "_overlayShowDelay" lib/services/background_service.dart
-          grep -q "userNotDetected" lib/services/background_service.dart
-          grep -q "_ensureDefaultMonitoring" lib/UI/dashboard.dart
-          grep -q "_showUserNotDetected" lib/main.dart
+          grep -q "_overlayShowDelay = Duration(milliseconds: 500)" lib/services/background_service.dart
+          grep -q "bool userNotDetected = false" lib/services/background_service.dart
+          grep -q "_setOverlayWarningDebounced" lib/services/background_service.dart
+          grep -q "Future<void> _ensureDefaultMonitoring() async" lib/UI/dashboard.dart
           grep -q "Icons.person_off_outlined" lib/main.dart
 
-      - name: Commit and remove temporary workflow
+      - name: Commit
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/services/background_service.dart lib/UI/dashboard.dart lib/main.dart
+          git add lib/services/background_service.dart lib/UI/dashboard.dart lib/UI/settings_page.dart lib/main.dart
+          git diff --cached --quiet && exit 0
           git commit -m 'Apply PDS stability changes'
-          git push origin ui-overhaul-2026-08
-          git rm .github/workflows/pds-stability-v1.yml
-          git commit -m 'Remove temporary PDS workflow'
           git push origin ui-overhaul-2026-08
