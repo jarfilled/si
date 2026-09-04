@@ -6,26 +6,23 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:image/image.dart' as img;
 import 'package:nsfw_detector_flutter/nsfw_detector_flutter.dart';
 
 import '../services/background_service.dart';
 
 class NSFWDetectionController {
   static final NSFWDetectionController _instance =
-  NSFWDetectionController._internal();
+      NSFWDetectionController._internal();
 
   factory NSFWDetectionController() => _instance;
 
   NSFWDetectionController._internal();
 
   static const _screenshotChannel =
-  MethodChannel('monitor/screenshot/capture');
+      MethodChannel('monitor/screenshot/capture');
 
   static const _controlChannel =
-  MethodChannel('com.example.overlay/control');
-
-  NsfwDetector? _detector;
+      MethodChannel('com.example.overlay/control');
 
   Timer? _detectionTimer;
 
@@ -33,15 +30,10 @@ class NSFWDetectionController {
   bool _isProcessing = false;
   bool _isOverlayActive = false;
 
-  // True whenever NSFW currently owns the overlay window (which, since
-  // we always close-and-recreate rather than reuse, is true any time
-  // _isOverlayActive is true).
   bool _ownsOverlay = false;
-
   bool _hasOverlayPermission = false;
 
-  DateTime _lastShown =
-  DateTime.now().subtract(
+  DateTime _lastShown = DateTime.now().subtract(
     const Duration(seconds: 10),
   );
 
@@ -50,23 +42,16 @@ class NSFWDetectionController {
   // ---------------------------------------------------------------------------
 
   Future<void> init() async {
-    _detector ??= await NsfwDetector.load();
-
     _hasOverlayPermission =
-    await FlutterOverlayWindow.isPermissionGranted();
+        await FlutterOverlayWindow.isPermissionGranted();
 
     _controlChannel.setMethodCallHandler(
-          (call) async {
+      (call) async {
         if (call.method == 'resumeDetection') {
           debugPrint(
             '[NSFW] Resuming detection via control channel',
           );
 
-          // Fully tear down the overlay we created for the warning
-          // (rather than just flipping local flags) so the background
-          // service is told NSFW mode has ended and, if a posture
-          // warning is still active, its click-through HUD can be
-          // recreated on its next tick.
           await _closeOverlay();
 
           if (!_isActive) {
@@ -84,11 +69,9 @@ class NSFWDetectionController {
   Future<bool> enable() async {
     await init();
 
-    // Overlay permission is an Android app permission and should only
-    // be requested if it is genuinely missing.
     if (!_hasOverlayPermission) {
       final granted =
-      await FlutterOverlayWindow.requestPermission();
+          await FlutterOverlayWindow.requestPermission();
 
       _hasOverlayPermission = granted == true;
     }
@@ -134,7 +117,7 @@ class NSFWDetectionController {
 
     _detectionTimer = Timer.periodic(
       const Duration(seconds: 5),
-          (_) => _captureAndDetect(),
+      (_) => _captureAndDetect(),
     );
 
     debugPrint('[NSFW] Detection started');
@@ -156,7 +139,6 @@ class NSFWDetectionController {
   Future<void> _captureAndDetect() async {
     if (!_isActive ||
         _isProcessing ||
-        _detector == null ||
         !_hasOverlayPermission) {
       return;
     }
@@ -165,7 +147,7 @@ class NSFWDetectionController {
 
     try {
       final b64 =
-      await _screenshotChannel.invokeMethod<String>(
+          await _screenshotChannel.invokeMethod<String>(
         'captureScreen',
       );
 
@@ -173,15 +155,18 @@ class NSFWDetectionController {
         return;
       }
 
-      final image =
-      img.decodeImage(base64Decode(b64));
+      // base64Decode returns a Uint8List. Passing the raw bytes directly to
+      // the detector lets nsfw_detector_flutter perform the expensive model
+      // work inside its dedicated background isolate instead of blocking the
+      // Flutter UI isolate.
+      final imageBytes = base64Decode(b64);
 
-      if (image == null || !_isActive) {
+      if (imageBytes.isEmpty || !_isActive) {
         return;
       }
 
       final result =
-      await _detector!.detectNSFWFromImage(image);
+          await NsfwDetector.detectBytesInBackground(imageBytes);
 
       debugPrint(
         '[NSFW] Detected: ${result?.isNsfw}',
@@ -226,19 +211,10 @@ class NSFWDetectionController {
     }
 
     try {
-      // Tell the background service isolate immediately. It runs its
-      // own overlay lifecycle loop off continuous posture/sensor
-      // streams, so it can otherwise close this overlay out from under
-      // us within milliseconds. Sending this first gives the
-      // cross-isolate message the maximum time to land before that
-      // loop's next tick.
       BackgroundMonitorService.setNsfwOverlayActive(true);
 
-      // Whatever overlay might currently be showing (the posture HUD)
-      // was created with OverlayFlag.clickThrough, so its dismiss
-      // button would be untappable if we just reused it. The plugin
-      // can't change a live overlay's flag, so always close whatever's
-      // there and recreate it non-click-through instead of reusing it.
+      // The posture HUD uses a click-through window. Recreate it as a normal
+      // window so the NSFW warning is fully interactive.
       if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.closeOverlay();
 
@@ -251,21 +227,20 @@ class NSFWDetectionController {
         height: 800,
         alignment: OverlayAlignment.center,
         flag: OverlayFlag.defaultFlag,
-        visibility:
-        NotificationVisibility.visibilityPublic,
+        visibility: NotificationVisibility.visibilityPublic,
         positionGravity: PositionGravity.auto,
       );
 
       _ownsOverlay = true;
 
-      // Give the overlay isolate a moment to initialize.
+      // Give the overlay isolate a moment to initialize before sending the
+      // mode message. This delay does not occur on the app's widget tree.
       await Future<void>.delayed(
         const Duration(milliseconds: 150),
       );
 
       _isOverlayActive = true;
 
-      // Tell the new OverlayHud instance to switch to NSFW mode.
       await FlutterOverlayWindow.shareData({
         'type': 'nsfw',
       });
@@ -273,7 +248,6 @@ class NSFWDetectionController {
       debugPrint(
         '[NSFW] NSFW HUD displayed',
       );
-
     } catch (e, stackTrace) {
       debugPrint(
         '[NSFW] Failed to show HUD: $e',
@@ -299,10 +273,6 @@ class NSFWDetectionController {
 
     try {
       if (await FlutterOverlayWindow.isActive()) {
-        // Tell the HUD that NSFW mode is over, then close the window.
-        // We always own it while it's showing the warning (we never
-        // reuse an existing overlay — see _showOverlay), so it's
-        // always safe for us to close it here.
         await FlutterOverlayWindow.shareData({
           'type': 'none',
         });
@@ -317,9 +287,6 @@ class NSFWDetectionController {
       _isOverlayActive = false;
       _ownsOverlay = false;
 
-      // Let the background service know NSFW no longer owns the
-      // overlay, so its posture loop can recreate a click-through HUD
-      // if a posture warning is still active.
       BackgroundMonitorService.setNsfwOverlayActive(false);
 
       debugPrint(
