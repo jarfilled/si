@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,8 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:nsfw_detector_flutter/nsfw_detector_flutter.dart';
 
 import '../services/background_service.dart';
+
+Uint8List _decodeScreenshotBase64(String source) => base64Decode(source);
 
 class NSFWDetectionController {
   static final NSFWDetectionController _instance =
@@ -146,9 +149,10 @@ class NSFWDetectionController {
         return;
       }
 
-      // Keep the expensive model work off the UI isolate. The screenshot
-      // capture itself remains every 5 seconds, as requested.
-      final imageBytes = base64Decode(b64);
+      // The screenshot can be much larger than the model input. Decode it in
+      // a separate isolate as well, so the UI isolate is not stalled by a
+      // large base64 -> byte-buffer allocation every 5 seconds.
+      final imageBytes = await compute(_decodeScreenshotBase64, b64);
 
       if (imageBytes.isEmpty ||
           !_isActive ||
