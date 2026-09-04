@@ -39,6 +39,11 @@ class WomensHealthShareService {
         return;
       }
 
+      final dateString =
+          '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+
       final smtpServer = gmail(_smtpUser, _smtpPassword);
 
       for (final contact in contacts) {
@@ -46,6 +51,18 @@ class WomensHealthShareService {
         final name = contact['name']?.toString().trim() ?? '';
 
         if (email == null || email.isEmpty) {
+          continue;
+        }
+
+        final existing = await _supabase
+            .from('womens_health_email_deliveries')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('contact_email', email)
+            .eq('log_date', dateString)
+            .limit(1);
+
+        if (existing.isNotEmpty) {
           continue;
         }
 
@@ -67,8 +84,17 @@ class WomensHealthShareService {
 
         try {
           await send(message, smtpServer);
+
+          await _supabase.from('womens_health_email_deliveries').insert({
+            'user_id': userId,
+            'contact_email': email,
+            'log_date': dateString,
+          });
+
           print("✅ Women's health report sent to $email");
         } catch (e) {
+          // A failed delivery is not recorded, so another registration can
+          // retry the email later that day.
           print("❌ Failed to send women's health report to $email: $e");
         }
       }
