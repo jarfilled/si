@@ -1,0 +1,350 @@
+name: Fix NSFW lifecycle v2
+on:
+  push:
+    branches: [ui-overhaul-2026-08]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Apply NSFW lifecycle v2 fixes') && !contains(github.event.head_commit.message, 'Remove temporary NSFW lifecycle v2 workflow')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-overhaul-2026-08
+          fetch-depth: 1
+      - name: Patch lifecycle and performance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # -----------------------------
+          # NSFW detector/controller
+          # -----------------------------
+          p = Path('lib/backend/nsfw_detection.dart')
+          text = p.read_text(encoding='utf-8')
+
+          text = text.replace("  static const _controlChannel =\n      MethodChannel('com.example.overlay/control');\n\n", '', 1)
+          text = text.replace("  bool _ownsOverlay = false;\n", '', 1)
+          text = text.replace("  bool _hasOverlayPermission = false;\n", "  bool _hasOverlayPermission = false;\n  int _runGeneration = 0;\n", 1)
+
+          old_init = """  Future<void> init() async {
+    _hasOverlayPermission =
+        await FlutterOverlayWindow.isPermissionGranted();
+
+    _controlChannel.setMethodCallHandler(
+      (call) async {
+        if (call.method == 'resumeDetection') {
+          debugPrint(
+            '[NSFW] Resuming detection via control channel',
+          );
+
+          await _closeOverlay();
+
+          if (!_isActive) {
+            start();
+          }
+        }
+      },
+    );
+  }
+"""
+          new_init = """  Future<void> init() async {
+    _hasOverlayPermission =
+        await FlutterOverlayWindow.isPermissionGranted();
+  }
+"""
+          if old_init not in text:
+              raise SystemExit('init block missing')
+          text = text.replace(old_init, new_init, 1)
+
+          old_start = """  void start() {
+    if (_isActive) return;
+
+    if (!_hasOverlayPermission) {
+      debugPrint(
+        '[NSFW] Cannot start: overlay permission missing.',
+      );
+      return;
+    }
+
+    _isActive = true;
+
+    _detectionTimer?.cancel();
+
+    _detectionTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _captureAndDetect(),
+    );
+
+    debugPrint('[NSFW] Detection started');
+  }
+"""
+          new_start = """  void start() {
+    if (_isActive) return;
+
+    if (!_hasOverlayPermission) {
+      debugPrint(
+        '[NSFW] Cannot start: overlay permission missing.',
+      );
+      return;
+    }
+
+    _isActive = true;
+    final generation = ++_runGeneration;
+
+    _detectionTimer?.cancel();
+
+    _detectionTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => _captureAndDetect(generation),
+    );
+
+    debugPrint('[NSFW] Detection started');
+  }
+"""
+          if old_start not in text:
+              raise SystemExit('start block missing')
+          text = text.replace(old_start, new_start, 1)
+
+          old_stop = """  void stop() {
+    _isActive = false;
+
+    _detectionTimer?.cancel();
+    _detectionTimer = null;
+
+    debugPrint('[NSFW] Detection stopped');
+  }
+"""
+          new_stop = """  void stop() {
+    _isActive = false;
+    ++_runGeneration;
+
+    _detectionTimer?.cancel();
+    _detectionTimer = null;
+
+    debugPrint('[NSFW] Detection stopped');
+  }
+"""
+          if old_stop not in text:
+              raise SystemExit('stop block missing')
+          text = text.replace(old_stop, new_stop, 1)
+
+          old_capture_sig = "  Future<void> _captureAndDetect() async {"
+          new_capture_sig = "  Future<void> _captureAndDetect(int generation) async {"
+          text = text.replace(old_capture_sig, new_capture_sig, 1)
+
+          old_guard = """    if (!_isActive ||
+        _isProcessing ||
+        !_hasOverlayPermission) {
+      return;
+    }
+"""
+          new_guard = """    if (!_isActive ||
+        generation != _runGeneration ||
+        _isProcessing ||
+        !_hasOverlayPermission) {
+      return;
+    }
+
+    // Dismissing the overlay happens in the separate overlay engine.
+    // Detect that closure here and release NSFW ownership immediately.
+    if (_isOverlayActive && !await FlutterOverlayWindow.isActive()) {
+      _isOverlayActive = false;
+      BackgroundMonitorService.setNsfwOverlayActive(false);
+    }
+
+    // Do not keep taking screenshots while the warning is already visible.
+    if (_isOverlayActive) {
+      return;
+    }
+"""
+          if old_guard not in text:
+              raise SystemExit('capture guard missing')
+          text = text.replace(old_guard, new_guard, 1)
+
+          old_b64 = """      if (b64 == null || !_isActive) {
+        return;
+      }
+"""
+          new_b64 = """      if (b64 == null ||
+          !_isActive ||
+          generation != _runGeneration) {
+        return;
+      }
+"""
+          if old_b64 not in text:
+              raise SystemExit('b64 guard missing')
+          text = text.replace(old_b64, new_b64, 1)
+
+          old_bytes = """      if (imageBytes.isEmpty || !_isActive) {
+        return;
+      }
+"""
+          new_bytes = """      if (imageBytes.isEmpty ||
+          !_isActive ||
+          generation != _runGeneration) {
+        return;
+      }
+"""
+          if old_bytes not in text:
+              raise SystemExit('bytes guard missing')
+          text = text.replace(old_bytes, new_bytes, 1)
+
+          old_result = """      final result =
+          await NsfwDetector.detectBytesInBackground(imageBytes);
+
+      debugPrint(
+"""
+          new_result = """      final result =
+          await NsfwDetector.detectBytesInBackground(imageBytes);
+
+      if (!_isActive || generation != _runGeneration) {
+        return;
+      }
+
+      debugPrint(
+"""
+          if old_result not in text:
+              raise SystemExit('result block missing')
+          text = text.replace(old_result, new_result, 1)
+
+          text = text.replace("      _ownsOverlay = true;\n", '', 1)
+          text = text.replace("      _ownsOverlay = false;\n", '', 1)
+          text = text.replace("      _ownsOverlay = false;\n", '', 1)
+
+          old_dismiss_handler = """  Future<void> _closeOverlay({
+    bool forceClose = false,
+  }) async {
+    if (!_isOverlayActive && !forceClose) {
+      return;
+    }
+
+    try {
+      if (await FlutterOverlayWindow.isActive()) {
+        // Tell the HUD that NSFW mode is over, then close the window.
+        // We always own it while it's showing the warning (we never
+        // reuse an existing overlay — see _showOverlay), so it's
+        // always safe for us to close it here.
+        await FlutterOverlayWindow.shareData({
+          'type': 'none',
+        });
+
+        await FlutterOverlayWindow.closeOverlay();
+      }
+    } catch (e) {
+      debugPrint(
+        '[NSFW] Error closing HUD: $e',
+      );
+    } finally {
+      _isOverlayActive = false;
+      _ownsOverlay = false;
+
+      // Let the background service know NSFW no longer owns the
+      // overlay, so its posture loop can recreate a click-through HUD
+      // if a posture warning is still active.
+      BackgroundMonitorService.setNsfwOverlayActive(false);
+
+      debugPrint(
+        '[NSFW] NSFW HUD cleared',
+      );
+    }
+  }
+"""
+          new_dismiss_handler = """  Future<void> _closeOverlay({
+    bool forceClose = false,
+  }) async {
+    if (!_isOverlayActive && !forceClose) {
+      return;
+    }
+
+    try {
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
+    } catch (e) {
+      debugPrint(
+        '[NSFW] Error closing HUD: $e',
+      );
+    } finally {
+      _isOverlayActive = false;
+      BackgroundMonitorService.setNsfwOverlayActive(false);
+
+      debugPrint(
+        '[NSFW] NSFW HUD cleared',
+      );
+    }
+  }
+"""
+          if old_dismiss_handler not in text:
+              raise SystemExit('closeOverlay block missing')
+          text = text.replace(old_dismiss_handler, new_dismiss_handler, 1)
+
+          # -----------------------------
+          # Overlay engine buttons
+          # -----------------------------
+          p.write_text(text, encoding='utf-8')
+
+          p = Path('lib/main.dart')
+          text = p.read_text(encoding='utf-8')
+
+          old_dismiss = """  Future<void> _dismissNsfw() async {
+    try {
+      // Overlay shutdown is centralized in the detector/controller isolate.
+      await _controlChannel.invokeMethod('resumeDetection');
+
+      if (mounted) {
+        setState(() => _showNsfw = false);
+      }
+    } catch (e) {
+      debugPrint('[OverlayHud] Error dismissing NSFW warning: $e');
+    }
+  }
+"""
+          new_dismiss = """  Future<void> _dismissNsfw() async {
+    try {
+      // This widget lives in the separate overlay Flutter engine, so it
+      // cannot invoke a MethodChannel handler registered by the main app
+      // engine. Close the actual overlay window directly.
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
+
+      if (mounted) {
+        setState(() => _showNsfw = false);
+      }
+    } catch (e) {
+      debugPrint('[OverlayHud] Error dismissing NSFW warning: $e');
+    }
+  }
+"""
+          if old_dismiss not in text:
+              raise SystemExit('main dismiss block missing')
+          text = text.replace(old_dismiss, new_dismiss, 1)
+          text = text.replace("  static const MethodChannel _controlChannel =\n      MethodChannel('com.example.overlay/control');\n\n", '', 1)
+          p.write_text(text, encoding='utf-8')
+
+          print('NSFW lifecycle v2 patch applied')
+          PY
+
+      - name: Verify source
+        run: |
+          grep -q "Duration(seconds: 8)" lib/backend/nsfw_detection.dart
+          grep -q "generation != _runGeneration" lib/backend/nsfw_detection.dart
+          grep -q "FlutterOverlayWindow.closeOverlay()" lib/main.dart
+          ! grep -q "invokeMethod('resumeDetection')" lib/main.dart
+          ! grep -q "_controlChannel" lib/main.dart
+          echo 'NSFW lifecycle v2 verification passed.'
+
+      - name: Commit patch and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/backend/nsfw_detection.dart lib/main.dart
+          git commit -m 'Apply NSFW lifecycle v2 fixes'
+          git push origin ui-overhaul-2026-08
+          git rm .github/workflows/fix-nsfw-lifecycle-v2.yml
+          git commit -m 'Remove temporary NSFW lifecycle v2 workflow'
+          git push origin ui-overhaul-2026-08
