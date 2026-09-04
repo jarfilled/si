@@ -1,17 +1,17 @@
 name: Improve permission status feedback
 on:
   push:
-    branches: [ui-overhaul-2026-08]
+    branches: [ui-overhaul-2026-08, womens-sharing-integration-2026-09]
 permissions:
   contents: write
 jobs:
   patch:
-    if: "!contains(github.event.head_commit.message, 'Apply permission status feedback') && !contains(github.event.head_commit.message, 'Remove temporary permission status workflow')"
+    if: "!contains(github.event.head_commit.message, 'Apply permission status feedback') && !contains(github.event.head_commit.message, 'Remove temporary permission status workflow') && !contains(github.event.head_commit.message, 'Integrate women health daily sharing')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ui-overhaul-2026-08
+          ref: ${{ github.ref_name }}
           fetch-depth: 1
       - name: Patch settings
         shell: bash
@@ -164,3 +164,82 @@ jobs:
           git rm .github/workflows/fix-permission-status.yml
           git commit -m 'Remove temporary permission status workflow'
           git push origin ui-overhaul-2026-08
+
+  women-sharing:
+    if: "contains(github.event.head_commit.message, 'Trigger women sharing patch')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: womens-sharing-integration-2026-09
+          fetch-depth: 2
+
+      - name: Patch women health page
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('lib/UI/womens_health_page.dart')
+          text = path.read_text(encoding='utf-8')
+
+          import_marker = "import 'package:shamsi_date/shamsi_date.dart';"
+          import_add = "import 'package:shamsi_date/shamsi_date.dart';\n\nimport '../services/womens_health_sharing_service.dart';\nimport 'womens_health_sharing_card.dart';"
+          if "womens_health_sharing_service.dart" not in text:
+              if import_marker not in text:
+                  raise SystemExit('Import marker not found; aborting.')
+              text = text.replace(import_marker, import_add, 1)
+
+          save_marker = "      await _loadHealthData();\n\n      if (!mounted) return;\n\n      FocusScope.of(context).unfocus();"
+          save_replacement = """      try {
+        final sent = await WomensHealthSharingService.instance.sendDailyReport(
+          date: dateString,
+          mood: mood,
+          pain: pain,
+        );
+
+        if (sent > 0) {
+          debugPrint('[WomensHealthPage] Daily mood/pain report sent to $sent contact(s).');
+        }
+      } catch (e) {
+        // Saving the health entry must remain independent from email delivery.
+        debugPrint('[WomensHealthPage] Daily sharing failed: $e');
+      }
+
+      await _loadHealthData();
+
+      if (!mounted) return;
+
+      FocusScope.of(context).unfocus();"""
+          if "Daily mood/pain report sent" not in text:
+              if save_marker not in text:
+                  raise SystemExit('Daily save marker not found; aborting.')
+              text = text.replace(save_marker, save_replacement, 1)
+
+          card_marker = "                      _socialCard(),\n                      const SizedBox(height: 20),"
+          card_replacement = """                      _socialCard(),
+                      const SizedBox(height: 12),
+                      const WomensHealthSharingCard(),
+                      const SizedBox(height: 20),"""
+          if "const WomensHealthSharingCard()" not in text:
+              if card_marker not in text:
+                  raise SystemExit('Build card marker not found; aborting.')
+              text = text.replace(card_marker, card_replacement, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Verify targeted integration
+        run: |
+          grep -q "womens_health_sharing_service.dart" lib/UI/womens_health_page.dart
+          grep -q "const WomensHealthSharingCard()" lib/UI/womens_health_page.dart
+          grep -q "sendDailyReport" lib/UI/womens_health_page.dart
+
+      - name: Remove temporary files and restore baseline workflow
+        run: |
+          git checkout HEAD~1 -- .github/workflows/fix-permission-status.yml
+          rm -f .womens-sharing-patch-trigger
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/UI/womens_health_page.dart .github/workflows/fix-permission-status.yml
+          git add -u .womens-sharing-patch-trigger
+          git commit -m 'Integrate women health daily sharing'
+          git push origin womens-sharing-integration-2026-09
