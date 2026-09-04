@@ -1,5 +1,7 @@
 // lib/main.dart
 
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -60,12 +62,25 @@ class OverlayHud extends StatefulWidget {
 }
 
 class _OverlayHudState extends State<OverlayHud> {
+  static const _indicatorShowDelay = Duration(milliseconds: 500);
+  static const _indicatorHideGrace = Duration(milliseconds: 700);
+
   bool _showTooClose = false;
   bool _showNeck = false;
   bool _showWrist = false;
   bool _showHunch = false;
   bool _showLowLight = false;
   bool _showNsfw = false;
+
+  Timer? _indicatorShowTimer;
+  Timer? _indicatorHideTimer;
+
+  bool get _hasPostureIndicator =>
+      _showTooClose ||
+      _showNeck ||
+      _showWrist ||
+      _showHunch ||
+      _showLowLight;
 
   @override
   void initState() {
@@ -88,19 +103,41 @@ class _OverlayHudState extends State<OverlayHud> {
           return value?.toString().toLowerCase() == 'true';
         }
 
-        setState(() {
-          _showTooClose = readBool('tooClose');
-          _showNeck = readBool('neck');
-          _showWrist = readBool('wrist') || readBool('wristPoor');
-          _showHunch = readBool('hunch') || readBool('hunchPoor');
-          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');
+        final tooClose = readBool('tooClose');
+        final neck = readBool('neck');
+        final wrist = readBool('wrist') || readBool('wristPoor');
+        final hunch = readBool('hunch') || readBool('hunchPoor');
+        final lowLight = readBool('lowLight') || readBool('lowLightPoor');
 
+        setState(() {
           if (type == 'nsfw') {
             _showNsfw = true;
           } else if (type == 'none') {
             _showNsfw = false;
           }
         });
+
+        if (type == 'none') {
+          _cancelPostureIndicatorTimers();
+          if (_hasPostureIndicator) {
+            setState(() {
+              _showTooClose = false;
+              _showNeck = false;
+              _showWrist = false;
+              _showHunch = false;
+              _showLowLight = false;
+            });
+          }
+          return;
+        }
+
+        _updatePostureIndicators(
+          tooClose: tooClose,
+          neck: neck,
+          wrist: wrist,
+          hunch: hunch,
+          lowLight: lowLight,
+        );
         return;
       }
 
@@ -108,6 +145,7 @@ class _OverlayHudState extends State<OverlayHud> {
         if (data == 'nsfw') {
           setState(() => _showNsfw = true);
         } else if (data == 'none') {
+          _cancelPostureIndicatorTimers();
           setState(() {
             _showNsfw = false;
             _showTooClose = false;
@@ -119,6 +157,90 @@ class _OverlayHudState extends State<OverlayHud> {
         }
       }
     });
+  }
+
+  void _updatePostureIndicators({
+    required bool tooClose,
+    required bool neck,
+    required bool wrist,
+    required bool hunch,
+    required bool lowLight,
+  }) {
+    final hasWarning =
+        tooClose || neck || wrist || hunch || lowLight;
+
+    if (hasWarning) {
+      _indicatorHideTimer?.cancel();
+      _indicatorHideTimer = null;
+
+      if (_hasPostureIndicator) {
+        // Once visible, update active warning icons immediately. The grace
+        // period above prevents them from disappearing during brief recovery.
+        setState(() {
+          _showTooClose = tooClose;
+          _showNeck = neck;
+          _showWrist = wrist;
+          _showHunch = hunch;
+          _showLowLight = lowLight;
+        });
+        return;
+      }
+
+      // A transient detector spike must persist before becoming visible.
+      _indicatorShowTimer ??= Timer(
+        _indicatorShowDelay,
+        () {
+          _indicatorShowTimer = null;
+          if (!mounted) return;
+
+          setState(() {
+            _showTooClose = tooClose;
+            _showNeck = neck;
+            _showWrist = wrist;
+            _showHunch = hunch;
+            _showLowLight = lowLight;
+          });
+        },
+      );
+      return;
+    }
+
+    _indicatorShowTimer?.cancel();
+    _indicatorShowTimer = null;
+
+    if (_hasPostureIndicator) {
+      // Keep the HUD visible briefly after a warning clears so it doesn't
+      // rapidly pop in/out while the detector hovers around its threshold.
+      _indicatorHideTimer?.cancel();
+      _indicatorHideTimer = Timer(
+        _indicatorHideGrace,
+        () {
+          _indicatorHideTimer = null;
+          if (!mounted) return;
+
+          setState(() {
+            _showTooClose = false;
+            _showNeck = false;
+            _showWrist = false;
+            _showHunch = false;
+            _showLowLight = false;
+          });
+        },
+      );
+    }
+  }
+
+  void _cancelPostureIndicatorTimers() {
+    _indicatorShowTimer?.cancel();
+    _indicatorShowTimer = null;
+    _indicatorHideTimer?.cancel();
+    _indicatorHideTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _cancelPostureIndicatorTimers();
+    super.dispose();
   }
 
   @override
