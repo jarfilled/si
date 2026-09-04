@@ -67,9 +67,6 @@ class _OverlayHudState extends State<OverlayHud> {
   bool _showLowLight = false;
   bool _showNsfw = false;
 
-  static const MethodChannel _controlChannel =
-      MethodChannel('com.example.overlay/control');
-
   @override
   void initState() {
     super.initState();
@@ -280,14 +277,16 @@ class _OverlayHudState extends State<OverlayHud> {
 
   Future<void> _dismissNsfw() async {
     try {
-      // Overlay shutdown is centralized in the detector/controller isolate.
-      await _controlChannel.invokeMethod('resumeDetection');
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
 
       if (mounted) {
         setState(() => _showNsfw = false);
       }
-    } catch (e) {
-      debugPrint('[OverlayHud] Error dismissing NSFW warning: $e');
+    } catch (e, stackTrace) {
+      debugPrint('[OverlayHud] Error closing NSFW warning: $e');
+      debugPrint('$stackTrace');
     }
   }
 }
