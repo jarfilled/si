@@ -6,7 +6,6 @@ permissions:
   contents: write
 jobs:
   patch:
-    if: "!contains(github.event.head_commit.message, 'Optimize NSFW detection') && !contains(github.event.head_commit.message, 'Remove temporary NSFW optimization workflow')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,7 +13,7 @@ jobs:
           ref: ui-overhaul-2026-08
           fetch-depth: 1
 
-      - name: Patch NSFW detector and overlay
+      - name: Patch source
         shell: bash
         run: |
           python3 - <<'PY'
@@ -25,54 +24,46 @@ jobs:
               text = p.read_text(encoding='utf-8')
               if old not in text:
                   raise SystemExit(f'Missing expected block: {label}')
-              text = text.replace(old, new, 1)
-              p.write_text(text, encoding='utf-8')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # pubspec: use the release that provides detectBytesInBackground().
-          replace(
-              'pubspec.yaml',
-              '  nsfw_detector_flutter: ^1.0.5',
-              '  nsfw_detector_flutter: ^2.0.2',
-              'NSFW package version',
-          )
+          replace('pubspec.yaml', '  nsfw_detector_flutter: ^1.0.5', '  nsfw_detector_flutter: ^2.0.2', 'package version')
 
-          # Detector: remove UI-isolate model loading and synchronous image decode.
           p = Path('lib/backend/nsfw_detection.dart')
           text = p.read_text(encoding='utf-8')
           text = text.replace("import 'package:image/image.dart' as img;\n", '', 1)
           text = text.replace('  NsfwDetector? _detector;\n\n', '', 1)
-          text = text.replace(
-              """  Future<void> init() async {
+          replace_block = """  Future<void> init() async {
     _detector ??= await NsfwDetector.load();
 
     _hasOverlayPermission =
     await FlutterOverlayWindow.isPermissionGranted();
-""",
-              """  Future<void> init() async {
+"""
+          replacement_block = """  Future<void> init() async {
     _hasOverlayPermission =
     await FlutterOverlayWindow.isPermissionGranted();
-""",
-              'remove UI-isolate detector load',
-          )
-          text = text.replace(
-              """  Future<void> _captureAndDetect() async {
+"""
+          if replace_block not in text:
+              raise SystemExit('detector init block missing')
+          text = text.replace(replace_block, replacement_block, 1)
+          old_guard = """  Future<void> _captureAndDetect() async {
     if (!_isActive ||
         _isProcessing ||
         _detector == null ||
         !_hasOverlayPermission) {
       return;
     }
-""",
-              """  Future<void> _captureAndDetect() async {
+"""
+          new_guard = """  Future<void> _captureAndDetect() async {
     if (!_isActive ||
         _isProcessing ||
         !_hasOverlayPermission) {
       return;
     }
-""",
-              'detector guard',
-          )
-          old_decode = """      final image =
+"""
+          if old_guard not in text:
+              raise SystemExit('detector guard block missing')
+          text = text.replace(old_guard, new_guard, 1)
+          old_detect = """      final image =
       img.decodeImage(base64Decode(b64));
 
       if (image == null || !_isActive) {
@@ -82,24 +73,21 @@ jobs:
       final result =
       await _detector!.detectNSFWFromImage(image);
 """
-          new_decode = """      final imageBytes =
+          new_detect = """      final imageBytes =
           Uint8List.fromList(base64Decode(b64));
 
       if (imageBytes.isEmpty || !_isActive) {
         return;
       }
 
-      // The detector performs model load + inference in a background isolate,
-      // keeping TensorFlow/image work off Flutter's UI isolate.
       final result =
       await NsfwDetector.detectBytesInBackground(imageBytes);
 """
-          if old_decode not in text:
-              raise SystemExit('NSFW decode/inference block missing')
-          text = text.replace(old_decode, new_decode, 1)
+          if old_detect not in text:
+              raise SystemExit('detector inference block missing')
+          text = text.replace(old_detect, new_detect, 1)
           p.write_text(text, encoding='utf-8')
 
-          # Overlay: make dismissal an explicit X and avoid duplicate shareData.
           p = Path('lib/main.dart')
           text = p.read_text(encoding='utf-8')
           old_warning = """  Widget _buildNsfwWarning() {
@@ -258,11 +246,7 @@ jobs:
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.visibility_off_rounded,
-                  color: Colors.redAccent,
-                  size: 25,
-                ),
+                const Icon(Icons.visibility_off_rounded, color: Colors.redAccent, size: 25),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
@@ -270,11 +254,7 @@ jobs:
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -285,15 +265,8 @@ jobs:
                     onPressed: _dismissNsfw,
                     tooltip: 'بستن',
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 44,
-                      height: 44,
-                    ),
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: Colors.white70,
-                      size: 24,
-                    ),
+                    constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 24),
                   ),
                 ),
               ],
@@ -304,11 +277,7 @@ jobs:
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                height: 1.25,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.25),
             ),
             const SizedBox(height: 10),
             SizedBox(
@@ -320,17 +289,9 @@ jobs:
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                child: const Text(
-                  'ادامه در برنامه',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: const Text('ادامه در برنامه', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -340,9 +301,8 @@ jobs:
   }
 """
           if old_warning not in text:
-              raise SystemExit('NSFW warning widget block missing')
+              raise SystemExit('overlay warning block missing')
           text = text.replace(old_warning, new_warning, 1)
-
           old_dismiss = """      if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.shareData({
           'type': 'none',
@@ -353,18 +313,17 @@ jobs:
       // Tell the native detector to resume.
       // ----------------------------------------------------------------------
 """
-          new_dismiss = """      // The detector owns overlay shutdown. Do not send a second overlay
-      // message here; doing both races the detector's close lifecycle.
+          new_dismiss = """      // The detector owns overlay shutdown. Avoid sending a duplicate
+      // overlay message from the overlay isolate.
       // ----------------------------------------------------------------------
       // Tell the native detector to resume.
       // ----------------------------------------------------------------------
 """
           if old_dismiss not in text:
-              raise SystemExit('NSFW dismiss block missing')
+              raise SystemExit('dismiss block missing')
           text = text.replace(old_dismiss, new_dismiss, 1)
           p.write_text(text, encoding='utf-8')
-
-          print('NSFW optimization patch applied.')
+          print('Patch complete')
           PY
 
       - name: Verify source
@@ -374,16 +333,12 @@ jobs:
           ! grep -q "NsfwDetector? _detector" lib/backend/nsfw_detection.dart
           grep -q "Icons.close_rounded" lib/main.dart
           grep -q "tooltip: 'بستن'" lib/main.dart
-          echo "NSFW source verification passed."
+          echo "Verification passed."
 
-      - name: Commit patch and remove workflow
-        shell: bash
+      - name: Commit source changes
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add pubspec.yaml lib/backend/nsfw_detection.dart lib/main.dart
           git commit -m 'Optimize NSFW detection and overlay dismissal'
-          git push origin ui-overhaul-2026-08
-          git rm .github/workflows/fix-nsfw-performance.yml
-          git commit -m 'Remove temporary NSFW optimization workflow'
           git push origin ui-overhaul-2026-08
