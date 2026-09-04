@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,13 +13,14 @@ import 'monitoring_sounds_page.dart';
 enum MonitoringMode { passive, overlay }
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+const SettingsPage({super.key});
 
-  @override
-  State<SettingsPage> createState() => _SettingsPageState();
+@override
+State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver {
+class _SettingsPageState extends State<SettingsPage>
+with WidgetsBindingObserver {
   static const bg = Color(0xFFF4F9F7);
   static const text = Color(0xFF263B37);
   static const sub = Color(0xFF7D8D89);
@@ -65,23 +67,30 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       final running = await BackgroundMonitorService.isRunning;
+
       if (!mounted) return;
 
       setState(() {
-        monitoring = running ||
-            (prefs.getBool('monitoring_enabled') ?? false);
+        monitoring =
+            running || (prefs.getBool('monitoring_enabled') ?? false);
+
         nsfw = prefs.getBool('nsfw_monitoring_enabled') ?? false;
+
         soundEnabled =
             prefs.getBool('monitoring_sound_enabled') ?? true;
+
         mode = prefs.getString('monitoring_mode') == 'overlay'
             ? MonitoringMode.overlay
             : MonitoringMode.passive;
+
         loading = false;
       });
     } catch (e, stackTrace) {
       debugPrint('[SettingsPage] Failed to load settings: $e');
       debugPrintStack(stackTrace: stackTrace);
+
       if (!mounted) return;
+
       setState(() => loading = false);
       _toast('بارگذاری تنظیمات انجام نشد.');
     }
@@ -109,7 +118,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     } on PlatformException catch (error, stackTrace) {
       debugPrint(
         '[SettingsPage] CameraService start failed: '
-        '${error.code}: ${error.message}',
+            '${error.code}: ${error.message}',
       );
       debugPrintStack(stackTrace: stackTrace);
       return false;
@@ -144,6 +153,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
       if (!value) {
         await prefs.setBool('monitoring_enabled', false);
+
         await _stopNativeCamera();
         BackgroundMonitorService.stop();
 
@@ -158,11 +168,12 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         if (mounted) {
           setState(() => monitoring = false);
         }
+
         return;
       }
 
       final monitoringPermissions =
-          await AppPermissionManager.ensureMonitoringPermissions();
+      await AppPermissionManager.ensureMonitoringPermissions();
 
       if (!monitoringPermissions) {
         _toast(
@@ -186,7 +197,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           .eq('id', user.id)
           .maybeSingle();
 
-      final divisor = (row?['hunch_divisor'] as num?)?.toDouble();
+      final divisor =
+      (row?['hunch_divisor'] as num?)?.toDouble();
 
       if (divisor == null || !divisor.isFinite || divisor <= 0) {
         _toast('ابتدا کالیبراسیون وضعیت بدن را انجام دهید.');
@@ -195,7 +207,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
       await prefs.setDouble('hunch_divisor', divisor);
 
-      final cameraStarted = await _startCameraForMonitoring(divisor);
+      final cameraStarted =
+      await _startCameraForMonitoring(divisor);
 
       if (!cameraStarted) {
         _toast(
@@ -213,8 +226,11 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         setState(() => monitoring = true);
       }
     } catch (e, stackTrace) {
-      debugPrint('[SettingsPage] Monitoring toggle failed: $e');
+      debugPrint(
+        '[SettingsPage] Monitoring toggle failed: $e',
+      );
       debugPrintStack(stackTrace: stackTrace);
+
       _toast('تغییر وضعیت پایش انجام نشد.');
     } finally {
       if (mounted) {
@@ -229,30 +245,42 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     try {
       if (value == MonitoringMode.overlay) {
         final granted =
-            await AppPermissionManager.ensureOverlayPermission();
+        await AppPermissionManager.ensureOverlayPermission();
 
         if (!granted) {
           permissionPending = true;
+
           _toast(
             'اجازه نمایش روی سایر برنامه‌ها را فعال کنید و به سی برگردید.',
           );
+
           return;
         }
       }
 
       final modeString =
-          value == MonitoringMode.overlay ? 'overlay' : 'passive';
+      value == MonitoringMode.overlay ? 'overlay' : 'passive';
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('monitoring_mode', modeString);
-      await BackgroundMonitorService.setMonitoringMode(modeString);
+
+      await prefs.setString(
+        'monitoring_mode',
+        modeString,
+      );
+
+      await BackgroundMonitorService.setMonitoringMode(
+        modeString,
+      );
 
       if (mounted) {
         setState(() => mode = value);
       }
     } catch (e, stackTrace) {
-      debugPrint('[SettingsPage] Failed to change monitoring mode: $e');
+      debugPrint(
+        '[SettingsPage] Failed to change monitoring mode: $e',
+      );
       debugPrintStack(stackTrace: stackTrace);
+
       _toast('تغییر نحوه دریافت هشدار انجام نشد.');
     }
   }
@@ -268,9 +296,12 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     });
 
     try {
-      await BackgroundMonitorService.setMonitoringSoundEnabled(value);
+      await BackgroundMonitorService
+          .setMonitoringSoundEnabled(value);
     } catch (e, stackTrace) {
-      debugPrint('[SettingsPage] Failed to change sound setting: $e');
+      debugPrint(
+        '[SettingsPage] Failed to change sound setting: $e',
+      );
       debugPrintStack(stackTrace: stackTrace);
 
       if (mounted) {
@@ -292,13 +323,16 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
     try {
       if (value) {
-        final started = await NSFWDetectionController().enable();
+        final started =
+        await NSFWDetectionController().enable();
 
         if (!started) {
           permissionPending = true;
+
           _toast(
             'اجازه نمایش روی سایر برنامه‌ها را فعال کنید و به سی برگردید.',
           );
+
           return;
         }
       } else {
@@ -306,14 +340,21 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('nsfw_monitoring_enabled', value);
+
+      await prefs.setBool(
+        'nsfw_monitoring_enabled',
+        value,
+      );
 
       if (mounted) {
         setState(() => nsfw = value);
       }
     } catch (e, stackTrace) {
-      debugPrint('[SettingsPage] NSFW toggle failed: $e');
+      debugPrint(
+        '[SettingsPage] NSFW toggle failed: $e',
+      );
       debugPrintStack(stackTrace: stackTrace);
+
       _toast('تغییر محافظت از محتوا انجام نشد.');
     } finally {
       if (mounted) {
@@ -324,13 +365,107 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
   Future<void> _retryNsfw() async {
     try {
-      final granted = await FlutterOverlayWindow.isPermissionGranted();
+      final granted =
+      await FlutterOverlayWindow.isPermissionGranted();
+
       if (granted && !nsfw) {
         await _toggleNsfw(true);
       }
     } catch (e, stackTrace) {
-      debugPrint('[SettingsPage] NSFW permission retry failed: $e');
+      debugPrint(
+        '[SettingsPage] NSFW permission retry failed: $e',
+      );
       debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _checkCameraPermission() async {
+    try {
+      final status = await Permission.camera.status;
+
+      if (status.isGranted) {
+        _toast('مجوز دوربین قبلاً فعال است.');
+        return;
+      }
+
+      final granted =
+      await AppPermissionManager.ensureMonitoringPermissions();
+
+      if (granted) {
+        _toast('مجوز دوربین فعال شد.');
+      } else {
+        _toast('اجازه دوربین داده نشده است.');
+      }
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[SettingsPage] Camera permission check failed: $e',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+
+      _toast('بررسی مجوز دوربین انجام نشد.');
+    }
+  }
+
+  Future<void> _checkOverlayPermission() async {
+    try {
+      final alreadyGranted =
+      await FlutterOverlayWindow.isPermissionGranted();
+
+      if (alreadyGranted) {
+        _toast(
+          'مجوز نمایش روی سایر برنامه‌ها قبلاً فعال است.',
+        );
+        return;
+      }
+
+      final granted =
+      await AppPermissionManager.ensureOverlayPermission();
+
+      if (granted) {
+        _toast(
+          'مجوز نمایش روی سایر برنامه‌ها فعال شد.',
+        );
+      } else {
+        permissionPending = true;
+
+        _toast(
+          'اجازه نمایش روی سایر برنامه‌ها داده نشده است.',
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[SettingsPage] Overlay permission check failed: $e',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+
+      _toast('بررسی مجوز نمایش روی سایر برنامه‌ها انجام نشد.');
+    }
+  }
+
+  Future<void> _checkNotificationPermission() async {
+    try {
+      final status = await Permission.notification.status;
+
+      if (status.isGranted) {
+        _toast('مجوز اعلان‌ها قبلاً فعال است.');
+        return;
+      }
+
+      final granted =
+      await AppPermissionManager.ensureNotificationPermission();
+
+      if (granted) {
+        _toast('مجوز اعلان‌ها فعال شد.');
+      } else {
+        _toast('اجازه اعلان‌ها داده نشده است.');
+      }
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[SettingsPage] Notification permission check failed: $e',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+
+      _toast('بررسی مجوز اعلان‌ها انجام نشد.');
     }
   }
 
@@ -347,7 +482,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
       );
   }
 
-  Widget _card(Widget child) => Container(
+  Widget _card(Widget child) =>
+      Container(
         padding: const EdgeInsets.all(17),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -364,17 +500,23 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         child: child,
       );
 
-  Widget _icon(IconData icon, Color color) => Container(
+  Widget _icon(IconData icon, Color color) =>
+      Container(
         width: 43,
         height: 43,
         decoration: const BoxDecoration(
           color: mint,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: color, size: 20),
+        child: Icon(
+          icon,
+          color: color,
+          size: 20,
+        ),
       );
 
-  Widget _section(String title, String subtitle) => Padding(
+  Widget _section(String title, String subtitle) =>
+      Padding(
         padding: const EdgeInsets.fromLTRB(2, 19, 2, 9),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,18 +532,19 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
             const SizedBox(height: 3),
             Text(
               subtitle,
-              style: const TextStyle(color: sub, fontSize: 10),
+              style: const TextStyle(
+                color: sub,
+                fontSize: 10,
+              ),
             ),
           ],
         ),
       );
 
-  Widget _modeButton(
-    MonitoringMode value,
-    IconData icon,
-    String title,
-    String subtitle,
-  ) {
+  Widget _modeButton(MonitoringMode value,
+      IconData icon,
+      String title,
+      String subtitle,) {
     final selected = mode == value;
 
     return Expanded(
@@ -414,15 +557,22 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
           decoration: BoxDecoration(
             color: selected ? mint : bg,
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: selected ? green : line),
+            border: Border.all(
+              color: selected ? green : line,
+            ),
           ),
           child: Row(
             children: [
-              Icon(icon, color: selected ? green : sub, size: 18),
+              Icon(
+                icon,
+                color: selected ? green : sub,
+                size: 18,
+              ),
               const SizedBox(width: 7),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
@@ -435,7 +585,10 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(color: sub, fontSize: 8),
+                      style: const TextStyle(
+                        color: sub,
+                        fontSize: 8,
+                      ),
                     ),
                   ],
                 ),
@@ -447,12 +600,11 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
     );
   }
 
-  Widget _action(
-    IconData icon,
-    String title,
-    String subtitle,
-    VoidCallback onTap,
-  ) => InkWell(
+  Widget _action(IconData icon,
+      String title,
+      String subtitle,
+      VoidCallback onTap,) =>
+      InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Row(
@@ -461,7 +613,8 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
             const SizedBox(width: 10),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -482,7 +635,10 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                 ],
               ),
             ),
-            const Icon(Icons.chevron_left_rounded, color: sub),
+            const Icon(
+              Icons.chevron_left_rounded,
+              color: sub,
+            ),
           ],
         ),
       );
@@ -496,299 +652,349 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
         body: SafeArea(
           child: loading
               ? const Center(
-                  child: CircularProgressIndicator(color: green),
-                )
+            child: CircularProgressIndicator(
+              color: green,
+            ),
+          )
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
+            padding: const EdgeInsets.fromLTRB(
+              18,
+              10,
+              18,
+              30,
+            ),
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () =>
+                        Navigator.pop(context),
+                    icon: const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: text,
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'تنظیمات',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: text,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+
+              _section(
+                'پایش سلامت',
+                'همه کنترل‌های مربوط به پایش پس‌زمینه در یک نقطه.',
+              ),
+
+              _card(
+                Column(
                   children: [
                     Row(
                       children: [
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(
-                            Icons.arrow_forward_rounded,
-                            color: text,
-                          ),
+                        _icon(
+                          Icons.monitor_heart_outlined,
+                          green,
                         ),
+                        const SizedBox(width: 11),
                         const Expanded(
-                          child: Text(
-                            'تنظیمات',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: text,
-                              fontSize: 21,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 48),
-                      ],
-                    ),
-                    _section(
-                      'پایش سلامت',
-                      'همه کنترل‌های مربوط به پایش پس‌زمینه در یک نقطه.',
-                    ),
-                    _card(
-                      Column(
-                        children: [
-                          Row(
+                          child: Column(
+                            crossAxisAlignment:
+                            CrossAxisAlignment.start,
                             children: [
-                              _icon(Icons.monitor_heart_outlined, green),
-                              const SizedBox(width: 11),
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'پایش وضعیت بدن',
-                                      style: TextStyle(
-                                        color: text,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'گردن، قوز، مچ، فاصله و نور محیط',
-                                      style: TextStyle(color: sub, fontSize: 10),
-                                    ),
-                                  ],
+                              Text(
+                                'پایش وضعیت بدن',
+                                style: TextStyle(
+                                  color: text,
+                                  fontSize: 13,
+                                  fontWeight:
+                                  FontWeight.w900,
                                 ),
                               ),
-                              Switch.adaptive(
-                                value: monitoring,
-                                onChanged:
-                                    busyMonitoring ? null : _toggleMonitoring,
-                                activeColor: green,
+                              SizedBox(height: 4),
+                              Text(
+                                'گردن، قوز، مچ، فاصله و نور محیط',
+                                style: TextStyle(
+                                  color: sub,
+                                  fontSize: 10,
+                                ),
                               ),
                             ],
                           ),
-                          if (monitoring) ...[
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 15),
-                              child: Divider(color: line, height: 1),
-                            ),
-                            const Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                'نحوه دریافت هشدار',
-                                style: TextStyle(
-                                  color: text,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 9),
-                            Row(
-                              children: [
-                                _modeButton(
-                                  MonitoringMode.passive,
-                                  Icons.visibility_off_outlined,
-                                  'پس‌زمینه',
-                                  'بدون شناور',
-                                ),
-                                const SizedBox(width: 8),
-                                _modeButton(
-                                  MonitoringMode.overlay,
-                                  Icons.picture_in_picture_alt_outlined,
-                                  'شناور',
-                                  'روی صفحه',
-                                ),
-                              ],
-                            ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 15),
-                              child: Divider(color: line, height: 1),
-                            ),
-                            Row(
-                              children: [
-                                _icon(
-                                  soundEnabled
-                                      ? Icons.volume_up_outlined
-                                      : Icons.volume_off_outlined,
-                                  soundEnabled ? green : sub,
-                                ),
-                                const SizedBox(width: 11),
-                                const Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'صدای هشدار',
-                                        style: TextStyle(
-                                          color: text,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        'برای هشدارهای گردن، قوز، مچ، فاصله و نور صدا پخش شود.',
-                                        style: TextStyle(
-                                          color: sub,
-                                          fontSize: 10,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Switch.adaptive(
-                                  value: soundEnabled,
-                                  onChanged:
-                                      busySound ? null : _toggleSound,
-                                  activeColor: green,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
+                        ),
+                        Switch.adaptive(
+                          value: monitoring,
+                          onChanged: busyMonitoring
+                              ? null
+                              : _toggleMonitoring,
+                          activeColor: green,
+                        ),
+                      ],
+                    ),
+                    if (monitoring) ...[
+                      const Padding(
+                        padding:
+                        EdgeInsets.symmetric(
+                          vertical: 15,
+                        ),
+                        child: Divider(
+                          color: line,
+                          height: 1,
+                        ),
                       ),
-                    ),
-                    _section(
-                      'صداهای پایش',
-                      'برای هر هشدار صدای جداگانه انتخاب یا ضبط کنید.',
-                    ),
-                    _card(
-                      _action(
-                        Icons.record_voice_over_outlined,
-                        'شخصی‌سازی صداهای هشدار',
-                        'صدای پیش‌فرض، ضبط صدای خودتان یا فایل صوتی دستگاه',
-                        () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MonitoringSoundsPage(),
+                      const Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'نحوه دریافت هشدار',
+                          style: TextStyle(
+                            color: text,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
-                    ),
-                    _section(
-                      'محافظت دیجیتال',
-                      'محافظت از تجربه استفاده از صفحه را مستقل از پایش بدن کنترل کن.',
-                    ),
-                    _card(
+                      const SizedBox(height: 9),
                       Row(
                         children: [
-                          _icon(Icons.shield_outlined, teal),
+                          _modeButton(
+                            MonitoringMode.passive,
+                            Icons.visibility_off_outlined,
+                            'پس‌زمینه',
+                            'بدون شناور',
+                          ),
+                          const SizedBox(width: 8),
+                          _modeButton(
+                            MonitoringMode.overlay,
+                            Icons.picture_in_picture_alt_outlined,
+                            'شناور',
+                            'روی صفحه',
+                          ),
+                        ],
+                      ),
+                      const Padding(
+                        padding:
+                        EdgeInsets.symmetric(
+                          vertical: 15,
+                        ),
+                        child: Divider(
+                          color: line,
+                          height: 1,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          _icon(
+                            soundEnabled
+                                ? Icons.volume_up_outlined
+                                : Icons.volume_off_outlined,
+                            soundEnabled ? green : sub,
+                          ),
                           const SizedBox(width: 11),
                           const Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'پایش محتوای نامناسب',
+                                  'صدای هشدار',
                                   style: TextStyle(
                                     color: text,
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight:
+                                    FontWeight.w900,
                                   ),
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'در صورت تشخیص، هشدار محافظتی روی صفحه نمایش داده می‌شود.',
+                                  'برای هشدارهای گردن، قوز، مچ، فاصله و نور صدا پخش شود.',
                                   style: TextStyle(
                                     color: sub,
                                     fontSize: 10,
-                                    height: 1.5,
+                                    height: 1.4,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           Switch.adaptive(
-                            value: nsfw,
-                            onChanged: busyNsfw ? null : _toggleNsfw,
-                            activeColor: teal,
+                            value: soundEnabled,
+                            onChanged: busySound
+                                ? null
+                                : _toggleSound,
+                            activeColor: green,
                           ),
                         ],
                       ),
-                    ),
-                    _section(
-                      'مجوزها و سرویس',
-                      'وقتی یکی از قابلیت‌ها کار نمی‌کند، از اینجا وضعیت را دوباره بررسی کن.',
-                    ),
-                    _card(
-                      Column(
-                        children: [
-                          _action(
-                            Icons.camera_alt_outlined,
-                            'مجوز دوربین',
-                            'برای پایش گردن، قوز و فاصله',
-                            () async {
-                              final granted =
-                                  await AppPermissionManager.ensureMonitoringPermissions();
-                              if (!granted) {
-                                _toast('اجازه دوربین داده نشده است.');
-                              }
-                            },
-                          ),
-                          const Divider(height: 24, color: line),
-                          _action(
-                            Icons.layers_outlined,
-                            'مجوز نمایش روی سایر برنامه‌ها',
-                            'برای هشدارهای شناور',
-                            () async {
-                              final granted =
-                                  await AppPermissionManager.ensureOverlayPermission();
-                              if (!granted) {
-                                _toast(
-                                  'اجازه نمایش روی سایر برنامه‌ها داده نشده است.',
-                                );
-                              }
-                            },
-                          ),
-                          const Divider(height: 24, color: line),
-                          _action(
-                            Icons.notifications_none_rounded,
-                            'مجوز اعلان‌ها',
-                            'برای اعلان سرویس پایش',
-                            () async {
-                              await AppPermissionManager.ensureMonitoringPermissions();
-                            },
-                          ),
-                          const Divider(height: 24, color: line),
-                          _action(
-                            Icons.refresh_rounded,
-                            'بازخوانی وضعیت سرویس',
-                            'بررسی دوباره پایش پس‌زمینه',
-                            _load,
-                          ),
-                        ],
+                    ],
+                  ],
+                ),
+              ),
+
+              _section(
+                'صداهای پایش',
+                'برای هر هشدار صدای جداگانه انتخاب یا ضبط کنید.',
+              ),
+
+              _card(
+                _action(
+                  Icons.record_voice_over_outlined,
+                  'شخصی‌سازی صداهای هشدار',
+                  'صدای پیش‌فرض، ضبط صدای خودتان یا فایل صوتی دستگاه',
+                      () =>
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                          const MonitoringSoundsPage(),
+                        ),
                       ),
+                ),
+              ),
+
+              _section(
+                'محافظت دیجیتال',
+                'محافظت از تجربه استفاده از صفحه را مستقل از پایش بدن کنترل کن.',
+              ),
+
+              _card(
+                Row(
+                  children: [
+                    _icon(
+                      Icons.shield_outlined,
+                      teal,
                     ),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: mint,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Row(
+                    const SizedBox(width: 11),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.info_outline_rounded,
-                            color: green,
-                            size: 19,
+                          Text(
+                            'پایش محتوای نامناسب',
+                            style: TextStyle(
+                              color: text,
+                              fontSize: 13,
+                              fontWeight:
+                              FontWeight.w900,
+                            ),
                           ),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'اطلاعات حساب، ویرایش مشخصات و خروج از حساب در پروفایل قرار دارند تا تنظیمات فنی با حساب کاربری قاطی نشود.',
-                              style: TextStyle(
-                                color: text,
-                                fontSize: 10,
-                                height: 1.5,
-                              ),
+                          SizedBox(height: 4),
+                          Text(
+                            'در صورت تشخیص، هشدار محافظتی روی صفحه نمایش داده می‌شود.',
+                            style: TextStyle(
+                              color: sub,
+                              fontSize: 10,
+                              height: 1.5,
                             ),
                           ),
                         ],
                       ),
                     ),
+                    Switch.adaptive(
+                      value: nsfw,
+                      onChanged:
+                      busyNsfw ? null : _toggleNsfw,
+                      activeColor: teal,
+                    ),
                   ],
                 ),
+              ),
+
+              _section(
+                'مجوزها و سرویس',
+                'وقتی یکی از قابلیت‌ها کار نمی‌کند، از اینجا وضعیت را دوباره بررسی کن.',
+              ),
+
+              _card(
+                Column(
+                  children: [
+                    _action(
+                      Icons.camera_alt_outlined,
+                      'مجوز دوربین',
+                      'برای پایش گردن، قوز و فاصله',
+                      _checkCameraPermission,
+                    ),
+
+                    const Divider(
+                      height: 24,
+                      color: line,
+                    ),
+
+                    _action(
+                      Icons.layers_outlined,
+                      'مجوز نمایش روی سایر برنامه‌ها',
+                      'برای هشدارهای شناور',
+                      _checkOverlayPermission,
+                    ),
+
+                    const Divider(
+                      height: 24,
+                      color: line,
+                    ),
+
+                    _action(
+                      Icons.notifications_none_rounded,
+                      'مجوز اعلان‌ها',
+                      'برای اعلان سرویس پایش',
+                      _checkNotificationPermission,
+                    ),
+
+                    const Divider(
+                      height: 24,
+                      color: line,
+                    ),
+
+                    _action(
+                      Icons.refresh_rounded,
+                      'بازخوانی وضعیت سرویس',
+                      'بررسی دوباره پایش پس‌زمینه',
+                      _load,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: mint,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: green,
+                      size: 19,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'اطلاعات حساب، ویرایش مشخصات و خروج از حساب در پروفایل قرار دارند تا تنظیمات فنی با حساب کاربری قاطی نشود.',
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 10,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
