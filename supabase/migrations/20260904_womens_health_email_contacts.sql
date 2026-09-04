@@ -38,9 +38,15 @@ create table if not exists public.womens_health_email_deliveries (
   user_id uuid not null references auth.users(id) on delete cascade,
   contact_email text not null,
   log_date date not null,
-  sent_at timestamptz not null default now(),
-  unique (user_id, lower(contact_email), log_date)
+  sent_at timestamptz not null default now()
 );
+
+create unique index if not exists womens_health_email_deliveries_user_email_date_idx
+  on public.womens_health_email_deliveries (
+    user_id,
+    lower(contact_email),
+    log_date
+  );
 
 alter table public.womens_health_email_deliveries enable row level security;
 
