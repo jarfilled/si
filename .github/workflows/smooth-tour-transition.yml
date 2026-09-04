@@ -1,9 +1,6 @@
 name: Smooth initial tour transitions
 
-on:
-  push:
-    paths:
-      - '.github/workflows/smooth-tour-transition.yml'
+on: push
 
 permissions:
   contents: write
@@ -31,15 +28,8 @@ jobs:
                   raise SystemExit(f'missing block: {name}')
               s = s.replace(old, new, 1)
 
-          r(
-              'class _InitialTourOverlayState extends State<_InitialTourOverlay> {',
-              'class _InitialTourOverlayState extends State<_InitialTourOverlay> with SingleTickerProviderStateMixin {',
-              'mixin',
-          )
-
-          r(
-              '  int _index = 0;\n  Rect? _targetRect;\n  Element? _targetElement;\n  bool _busy = false;',
-              '''  int _index = 0;
+          r('class _InitialTourOverlayState extends State<_InitialTourOverlay> {', 'class _InitialTourOverlayState extends State<_InitialTourOverlay> with SingleTickerProviderStateMixin {', 'mixin')
+          r('  int _index = 0;\n  Rect? _targetRect;\n  Element? _targetElement;\n  bool _busy = false;', '''  int _index = 0;
   Rect? _targetRect;
   Element? _targetElement;
   bool _busy = false;
@@ -47,13 +37,8 @@ jobs:
   late final AnimationController _spotlightController;
   late final Animation<double> _spotlightAnimation;
   Rect? _fromRect;
-  Rect? _toRect;''',
-              'fields',
-          )
-
-          r(
-              "  void initState() {\n    super.initState();\n    final female = widget.userGender == 'female';",
-              '''  void initState() {
+  Rect? _toRect;''', 'fields')
+          r("  void initState() {\n    super.initState();\n    final female = widget.userGender == 'female';", '''  void initState() {
     super.initState();
 
     _spotlightController = AnimationController(
@@ -65,17 +50,14 @@ jobs:
       curve: Curves.easeOutCubic,
     );
 
-    final female = widget.userGender == 'female';''',
-              'controller init',
-          )
+    final female = widget.userGender == 'female';''', 'controller init')
 
           start = s.index('  Future<void> _prepareStep() async {')
           end = s.index('  void _calculateTarget() {', start)
           s = s[:start] + '''  Future<void> _prepareStep() async {
     if (!mounted) return;
 
-    // Keep the current spotlight visible while the underlying page changes.
-    // The new target is measured once the page has produced its next frame.
+    // Keep the current spotlight alive while the underlying page changes.
     if (_index == _steps.length - 1) {
       final profileState = ProfilePage.tourKey.currentState;
       if (profileState != null) {
@@ -92,14 +74,13 @@ jobs:
 
 ''' + s[end:]
 
-          old = '''    if (!mounted) return;
+          r('''    if (!mounted) return;
     setState(() {
       _targetElement = renderElement;
       _targetRect = rect;
     });
   }
-'''
-          new = '''    if (!mounted) return;
+''', '''    if (!mounted) return;
 
     _targetElement = renderElement;
     _targetRect = rect;
@@ -122,10 +103,9 @@ jobs:
 
     setState(() {});
   }
-'''
-          r(old, new, 'target update')
+''', 'target update')
 
-          old = '''      if (step.target == _TourTarget.navigation) {
+          r('''      if (step.target == _TourTarget.navigation) {
         final activated = await _invokeTargetTap();
         if (!activated) {
           debugPrint('[InitialTour] Navigation target was not activated.');
@@ -143,8 +123,7 @@ jobs:
         await widget.onSettingsOpened();
         return;
       }
-'''
-          new = '''      if (step.target == _TourTarget.navigation) {
+''', '''      if (step.target == _TourTarget.navigation) {
         final activated = await _invokeTargetTap();
         if (!activated) {
           debugPrint('[InitialTour] Navigation target was not activated.');
@@ -160,40 +139,31 @@ jobs:
         await widget.onSettingsOpened();
         return;
       }
-'''
-          r(old, new, 'waits')
+''', 'waits')
 
-          r(
-              '''      setState(() {
+          r('''      setState(() {
         _index++;
         _targetRect = null;
         _targetElement = null;
       });
       await _prepareStep();
-''',
-              '''      setState(() {
+''', '''      setState(() {
         _index++;
         _targetElement = null;
       });
       await _prepareStep();
-''',
-              'advance',
-          )
+''', 'advance')
 
-          r(
-              '''    if (w is InkWell && w.onTap != null) {
+          r('''    if (w is InkWell && w.onTap != null) {
       w.onTap!();
       await Future<void>.delayed(const Duration(milliseconds: 100));
       return true;
     }
-''',
-              '''    if (w is InkWell && w.onTap != null) {
+''', '''    if (w is InkWell && w.onTap != null) {
       w.onTap!();
       return true;
     }
-''',
-              'invoke tap',
-          )
+''', 'invoke tap')
 
           start = s.index('  @override\n  Widget build(BuildContext context) {', s.index('  Future<void> _skip'))
           end = s.index('  Widget _buildHint(Size size, _TourStep step) {', start)
@@ -233,39 +203,26 @@ jobs:
 
 '''+s[end:]
 
-          r(
-              '  Widget _buildHint(Size size, _TourStep step) {',
-              '  Widget _buildHint(Size size, _TourStep step, Rect? animatedRect) {',
-              'hint signature',
-          )
-
-          r(
-              '''    final top = _targetRect == null
+          r('  Widget _buildHint(Size size, _TourStep step) {', '  Widget _buildHint(Size size, _TourStep step, Rect? animatedRect) {', 'hint signature')
+          r('''    final top = _targetRect == null
         ? (size.height - 205.0) / 2.0
         : (_targetRect!.top > size.height * .55
             ? (_targetRect!.top - 225).clamp(20.0, maxTop).toDouble()
             : (_targetRect!.bottom + 18).clamp(20.0, maxTop).toDouble());
-''',
-              '''    final top = animatedRect == null
+''', '''    final top = animatedRect == null
         ? (size.height - 205.0) / 2.0
         : (animatedRect.top > size.height * .55
             ? (animatedRect.top - 225).clamp(20.0, maxTop).toDouble()
             : (animatedRect.bottom + 18).clamp(20.0, maxTop).toDouble());
-''',
-              'hint position',
-          )
+''', 'hint position')
 
-          r(
-              '  Future<void> _skip() async {',
-              '''  @override
+          r('  Future<void> _skip() async {', '''  @override
   void dispose() {
     _spotlightController.dispose();
     super.dispose();
   }
 
-  Future<void> _skip() async {''',
-              'dispose',
-          )
+  Future<void> _skip() async {''', 'dispose')
 
           p.write_text(s, encoding='utf-8')
           PY
