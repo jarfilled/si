@@ -53,6 +53,10 @@ const _monitoringSoundEnabledPreferenceKey =
 const double _tooCloseThresholdCm = 20.0;
 const double _lowLightThresholdLux = 100.0;
 
+const _overlayShowDelay = Duration(milliseconds: 500);
+const _overlayHideDelay = Duration(milliseconds: 300);
+const _postureDetectionTimeout = Duration(milliseconds: 1500);
+
 // ============================================================================
 // SERVICE CONTROLLER
 // ============================================================================
@@ -417,6 +421,11 @@ void onStart(
   bool stopped = false;
   bool nsfwOverlayActive = false;
 
+  bool userNotDetected = false;
+  DateTime? lastNeckSignalAt;
+  DateTime? lastHunchSignalAt;
+  Timer? postureDetectionWatchdog;
+
   String monitoringMode = 'passive';
 
   bool monitoringSoundEnabled =
@@ -466,6 +475,128 @@ void onStart(
   // OVERLAY STATE
   // ==========================================================================
 
+  final pendingOverlayTimers = <String, Timer?>{};
+
+  void _cancelPendingOverlayTimer(String key) {
+    pendingOverlayTimers[key]?.cancel();
+    pendingOverlayTimers[key] = null;
+  }
+
+  bool _readUserDetected(Map<dynamic, dynamic> data) {
+    for (final key in const [
+      'userNotDetected',
+      'user_not_detected',
+      'notDetected',
+      'not_detected',
+      'noUser',
+      'no_user',
+    ]) {
+      final value = data[key];
+      if (value is bool) return !value;
+    }
+
+    for (final key in const [
+      'userDetected',
+      'user_detected',
+      'detected',
+      'personDetected',
+      'person_detected',
+      'poseDetected',
+      'pose_detected',
+      'hasUser',
+      'has_user',
+    ]) {
+      final value = data[key];
+      if (value is bool) return value;
+    }
+
+    final status = data['status']?.toString().trim().toLowerCase();
+    if (status != null && const {
+      'not_detected',
+      'not detected',
+      'undetected',
+      'no_user',
+      'no user',
+      'no_person',
+      'no person',
+      'no_pose',
+      'no pose',
+      'lost',
+      'missing',
+    }.contains(status)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  void _clearCameraWarningsForLostUser() {
+    for (final type in const ['neck', 'hunch', 'tooClose']) {
+      updateWarningState(type, false);
+      _cancelPendingOverlayTimer(type);
+      overlayState[type] = false;
+    }
+
+    unawaited(metrics.stop('neck'));
+    unawaited(metrics.stop('hunch'));
+    unawaited(metrics.stop('tooClose'));
+  }
+
+  void _setUserNotDetected(bool value) {
+    if (userNotDetected == value) return;
+
+    userNotDetected = value;
+    overlayState['userNotDetected'] = value;
+
+    if (value) {
+      _clearCameraWarningsForLostUser();
+    }
+
+    queueOverlayUpdate();
+  }
+
+  void _startPostureDetectionWatchdog() {
+    postureDetectionWatchdog?.cancel();
+
+    postureDetectionWatchdog = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) {
+        if (stopped) return;
+
+        final now = DateTime.now();
+        final neckStale = lastNeckSignalAt == null ||
+            now.difference(lastNeckSignalAt!) > _postureDetectionTimeout;
+        final hunchStale = lastHunchSignalAt == null ||
+            now.difference(lastHunchSignalAt!) > _postureDetectionTimeout;
+
+        if (neckStale && hunchStale) {
+          _setUserNotDetected(true);
+        }
+      },
+    );
+  }
+
+  void _setOverlayWarningDebounced(String key, bool value) {
+    final current = overlayState[key] == true;
+
+    if (current == value) {
+      _cancelPendingOverlayTimer(key);
+      return;
+    }
+
+    _cancelPendingOverlayTimer(key);
+
+    pendingOverlayTimers[key] = Timer(
+      value ? _overlayShowDelay : _overlayHideDelay,
+      () {
+        pendingOverlayTimers[key] = null;
+        if (stopped) return;
+        overlayState[key] = value;
+        queueOverlayUpdate();
+      },
+    );
+  }
+
   final overlayState =
   <String, dynamic>{
     'type': 'hud',
@@ -474,6 +605,7 @@ void onStart(
     'wrist': false,
     'hunch': false,
     'lowLight': false,
+    'userNotDetected': false,
     'wristTilt': 0.0,
     'hunchRatio': 0.0,
     'lightLux': 0.0,
@@ -668,49 +800,31 @@ void onStart(
         double? hunchRatio,
         double? lightLux,
       }) {
-    final flagChanged =
-        overlayState[key] != value;
+    if (wristTilt != null) overlayState['wristTilt'] = wristTilt;
+    if (hunchRatio != null) overlayState['hunchRatio'] = hunchRatio;
+    if (lightLux != null) overlayState['lightLux'] = lightLux;
 
-    final wristChanged =
-        wristTilt != null &&
-            overlayState['wristTilt'] !=
-                wristTilt;
-
-    final hunchChanged =
-        hunchRatio != null &&
-            overlayState['hunchRatio'] !=
-                hunchRatio;
-
-    final lightChanged =
-        lightLux != null &&
-            overlayState['lightLux'] !=
-                lightLux;
-
-    if (wristTilt != null) {
-      overlayState['wristTilt'] =
-          wristTilt;
-    }
-
-    if (hunchRatio != null) {
-      overlayState['hunchRatio'] =
-          hunchRatio;
-    }
-
-    if (lightLux != null) {
-      overlayState['lightLux'] =
-          lightLux;
-    }
-
-    overlayState[key] =
-        value;
-
-    if (flagChanged ||
-        wristChanged ||
-        hunchChanged ||
-        lightChanged ||
-        value) {
+    if (key == 'userNotDetected') {
+      _cancelPendingOverlayTimer(key);
+      overlayState[key] = value;
       queueOverlayUpdate();
+      return;
     }
+
+    const warningKeys = <String>{
+      'tooClose',
+      'neck',
+      'wrist',
+      'hunch',
+      'lowLight',
+    };
+
+    if (warningKeys.contains(key)) {
+      _setOverlayWarningDebounced(key, value);
+      return;
+    }
+
+    queueOverlayUpdate();
   }
 
   // ==========================================================================
@@ -1162,6 +1276,14 @@ void onStart(
             raw,
           );
 
+          lastNeckSignalAt = DateTime.now();
+          final detected = _readUserDetected(data);
+          if (!detected) {
+            _setUserNotDetected(true);
+            return;
+          }
+          if (userNotDetected) _setUserNotDetected(false);
+
           final status =
               data['status']
                   ?.toString()
@@ -1228,6 +1350,14 @@ void onStart(
           Map<dynamic, dynamic>.from(
             raw,
           );
+
+          lastHunchSignalAt = DateTime.now();
+          final detected = _readUserDetected(data);
+          if (!detected) {
+            _setUserNotDetected(true);
+            return;
+          }
+          if (userNotDetected) _setUserNotDetected(false);
 
           final isHunching =
               data['is_hunching'] == true ||
@@ -1401,6 +1531,9 @@ void onStart(
   // ==========================================================================
   // NETWORK SYNC
   // ==========================================================================
+
+  _startPostureDetectionWatchdog();
+
 
   syncService.start();
 

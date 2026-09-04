@@ -69,7 +69,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
 
       setState(() {
         monitoring = running ||
-            (prefs.getBool('monitoring_enabled') ?? false);
+            (prefs.getBool('monitoring_enabled') ?? true);
         nsfw = prefs.getBool('nsfw_monitoring_enabled') ?? false;
         soundEnabled =
             prefs.getBool('monitoring_sound_enabled') ?? true;

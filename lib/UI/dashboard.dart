@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backend/daily_health_metric.dart';
 import '../backend/health_data_repository.dart';
+import '../services/app_permission_manager.dart';
 import '../services/background_service.dart';
 import 'exercise_center_page.dart';
 import 'posture_analysis_page.dart';
@@ -29,6 +31,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   static const Color teal = Color(0xFF45C4D0);
   static const Color bg = Color(0xFFF4F9F7);
   static const Color subtext = Color(0xFF7D8D89);
+  static const _cameraChannel = 'com.s_health/camera_control';
 
   int currentIndex = 0;
 
@@ -111,11 +114,53 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     _listenToService();
     _refreshMonitoringState();
+    _ensureDefaultMonitoring();
 
     monitoringPollTimer = Timer.periodic(
       const Duration(seconds: 2),
           (_) => _refreshMonitoringState(),
     );
+  }
+
+  Future<void> _ensureDefaultMonitoring() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+
+      final configured = prefs.getBool('monitoring_enabled');
+      if (configured == false) return;
+
+      final divisor = prefs.getDouble('hunch_divisor');
+      if (divisor == null || !divisor.isFinite || divisor <= 0) return;
+      if (await BackgroundMonitorService.isRunning) return;
+
+      final granted =
+          await AppPermissionManager.ensureMonitoringPermissions();
+      if (!granted) return;
+
+      const channel = MethodChannel(_cameraChannel);
+
+      await channel.invokeMethod(
+        'saveHunchDivisor',
+        {'hunch_divisor': divisor},
+      );
+
+      await channel.invokeMethod(
+        'startCamera',
+        {'hunch_divisor': divisor},
+      );
+
+      await BackgroundMonitorService.initialize();
+      BackgroundMonitorService.start();
+      await prefs.setBool('monitoring_enabled', true);
+
+      if (mounted) {
+        setState(() => serviceAlive = true);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[Dashboard] Default PDS startup failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   void _goTo(int index) {

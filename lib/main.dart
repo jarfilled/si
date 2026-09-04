@@ -65,6 +65,7 @@ class _OverlayHudState extends State<OverlayHud> {
   bool _showWrist = false;
   bool _showHunch = false;
   bool _showLowLight = false;
+  bool _showUserNotDetected = false;
   bool _showNsfw = false;
 
   @override
@@ -94,6 +95,7 @@ class _OverlayHudState extends State<OverlayHud> {
           _showWrist = readBool('wrist') || readBool('wristPoor');
           _showHunch = readBool('hunch') || readBool('hunchPoor');
           _showLowLight = readBool('lowLight') || readBool('lowLightPoor');
+          _showUserNotDetected = readBool('userNotDetected');
 
           if (type == 'nsfw') {
             _showNsfw = true;
@@ -148,6 +150,11 @@ class _OverlayHudState extends State<OverlayHud> {
                       ),
                     if (_showWrist)
                       _indicatorCircle(Icons.pan_tool, Colors.purple),
+                    if (_showUserNotDetected)
+                      _indicatorCircle(
+                        Icons.person_off_outlined,
+                        Colors.blueGrey,
+                      ),
                   ],
                 ),
               ),
