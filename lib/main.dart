@@ -117,6 +117,7 @@ class _OverlayHudState extends State<OverlayHud> {
             _showWrist = false;
             _showHunch = false;
             _showLowLight = false;
+            _showUserNotDetected = false;
           });
         }
       }

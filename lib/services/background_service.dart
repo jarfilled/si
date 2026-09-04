@@ -475,6 +475,199 @@ void onStart(
   // OVERLAY STATE
   // ==========================================================================
 
+  final overlayState =
+  <String, dynamic>{
+    'type': 'hud',
+    'tooClose': false,
+    'neck': false,
+    'wrist': false,
+    'hunch': false,
+    'lowLight': false,
+    'userNotDetected': false,
+    'wristTilt': 0.0,
+    'hunchRatio': 0.0,
+    'lightLux': 0.0,
+  };
+
+  DateTime lastOverlayTime =
+  DateTime.now()
+      .subtract(
+    const Duration(
+      seconds: 2,
+    ),
+  );
+
+  Future<void> overlayQueue =
+  Future<void>.value();
+
+  // ==========================================================================
+  // WARNING STATE TRANSITION
+  // ==========================================================================
+
+  void updateWarningState(
+      String type,
+      bool active,
+      ) {
+    final previous =
+        warningState[type] ?? false;
+
+    warningState[type] =
+        active;
+
+    // No transition:
+    //
+    // true -> true
+    //
+    // Do NOT retrigger the sound.
+    if (previous == active) {
+      return;
+    }
+
+    if (active) {
+      if (monitoringSoundEnabled) {
+        debugPrint(
+          '[BackgroundService] '
+              'AUDIO START: $type',
+        );
+
+        // No await here. The detector should not be blocked by audio playback.
+        unawaited(
+          audioManager.trigger(type),
+        );
+      } else {
+        debugPrint(
+          '[BackgroundService] '
+              'Sound disabled; ignoring: $type',
+        );
+      }
+    } else {
+      debugPrint(
+        '[BackgroundService] '
+            'AUDIO CLEAR: $type',
+      );
+
+      audioManager.clear(type);
+    }
+  }
+
+  // ==========================================================================
+  // OVERLAY HELPERS
+  // ==========================================================================
+
+  bool hasActiveWarning() {
+    return overlayState['tooClose'] == true ||
+        overlayState['neck'] == true ||
+        overlayState['wrist'] == true ||
+        overlayState['hunch'] == true ||
+        overlayState['lowLight'] == true ||
+        overlayState['userNotDetected'] == true;
+  }
+
+  bool hasNoActiveWarning() {
+    return !hasActiveWarning();
+  }
+
+  void queueOverlayUpdate() {
+    final snapshot =
+    Map<String, dynamic>.from(
+      overlayState,
+    );
+
+    overlayQueue =
+        overlayQueue.then(
+              (_) async {
+            if (stopped) {
+              return;
+            }
+
+            // Passive mode = no posture HUD.
+            if (monitoringMode != 'overlay') {
+              if (!nsfwOverlayActive) {
+                try {
+                  if (await FlutterOverlayWindow
+                      .isActive()) {
+                    await FlutterOverlayWindow
+                        .closeOverlay();
+                  }
+                } catch (error) {
+                  debugPrint(
+                    '[BackgroundService] '
+                        'Failed to close passive overlay: $error',
+                  );
+                }
+              }
+
+              return;
+            }
+
+            try {
+              final active =
+              await FlutterOverlayWindow
+                  .isActive();
+
+              if (hasActiveWarning()) {
+                if (!active) {
+                  final now =
+                  DateTime.now();
+
+                  if (now
+                      .difference(
+                    lastOverlayTime,
+                  )
+                      .inSeconds >=
+                      1) {
+                    await FlutterOverlayWindow
+                        .showOverlay(
+                      height: 1800,
+                      width: 1200,
+                      alignment:
+                      OverlayAlignment.center,
+                      flag:
+                      OverlayFlag.clickThrough,
+                      visibility:
+                      NotificationVisibility
+                          .visibilityPublic,
+                      positionGravity:
+                      PositionGravity.auto,
+                    );
+
+                    lastOverlayTime = now;
+                  }
+                }
+
+                if (await FlutterOverlayWindow
+                    .isActive()) {
+                  await FlutterOverlayWindow
+                      .shareData(snapshot);
+                }
+              } else if (active) {
+                await FlutterOverlayWindow
+                    .shareData(snapshot);
+
+                await Future<void>.delayed(
+                  const Duration(
+                    milliseconds: 100,
+                  ),
+                );
+
+                if (hasNoActiveWarning() &&
+                    !nsfwOverlayActive &&
+                    await FlutterOverlayWindow
+                        .isActive()) {
+                  await FlutterOverlayWindow
+                      .closeOverlay();
+                }
+              }
+            } catch (error) {
+              debugPrint(
+                '[BackgroundService] '
+                    'Overlay update failed: $error',
+              );
+            }
+          },
+        );
+  }
+
   final pendingOverlayTimers = <String, Timer?>{};
 
   void _cancelPendingOverlayTimer(String key) {
@@ -597,197 +790,6 @@ void onStart(
     );
   }
 
-  final overlayState =
-  <String, dynamic>{
-    'type': 'hud',
-    'tooClose': false,
-    'neck': false,
-    'wrist': false,
-    'hunch': false,
-    'lowLight': false,
-    'userNotDetected': false,
-    'wristTilt': 0.0,
-    'hunchRatio': 0.0,
-    'lightLux': 0.0,
-  };
-
-  DateTime lastOverlayTime =
-  DateTime.now()
-      .subtract(
-    const Duration(
-      seconds: 2,
-    ),
-  );
-
-  Future<void> overlayQueue =
-  Future<void>.value();
-
-  // ==========================================================================
-  // WARNING STATE TRANSITION
-  // ==========================================================================
-
-  void updateWarningState(
-      String type,
-      bool active,
-      ) {
-    final previous =
-        warningState[type] ?? false;
-
-    warningState[type] =
-        active;
-
-    // No transition:
-    //
-    // true -> true
-    //
-    // Do NOT retrigger the sound.
-    if (previous == active) {
-      return;
-    }
-
-    if (active) {
-      if (monitoringSoundEnabled) {
-        debugPrint(
-          '[BackgroundService] '
-              'AUDIO START: $type',
-        );
-
-        // No await here. The detector should not be blocked by audio playback.
-        unawaited(
-          audioManager.trigger(type),
-        );
-      } else {
-        debugPrint(
-          '[BackgroundService] '
-              'Sound disabled; ignoring: $type',
-        );
-      }
-    } else {
-      debugPrint(
-        '[BackgroundService] '
-            'AUDIO CLEAR: $type',
-      );
-
-      audioManager.clear(type);
-    }
-  }
-
-  // ==========================================================================
-  // OVERLAY HELPERS
-  // ==========================================================================
-
-  bool hasActiveWarning() {
-    return overlayState['tooClose'] == true ||
-        overlayState['neck'] == true ||
-        overlayState['wrist'] == true ||
-        overlayState['hunch'] == true ||
-        overlayState['lowLight'] == true;
-  }
-
-  bool hasNoActiveWarning() {
-    return !hasActiveWarning();
-  }
-
-  void queueOverlayUpdate() {
-    final snapshot =
-    Map<String, dynamic>.from(
-      overlayState,
-    );
-
-    overlayQueue =
-        overlayQueue.then(
-              (_) async {
-            if (stopped) {
-              return;
-            }
-
-            // Passive mode = no posture HUD.
-            if (monitoringMode != 'overlay') {
-              if (!nsfwOverlayActive) {
-                try {
-                  if (await FlutterOverlayWindow
-                      .isActive()) {
-                    await FlutterOverlayWindow
-                        .closeOverlay();
-                  }
-                } catch (error) {
-                  debugPrint(
-                    '[BackgroundService] '
-                        'Failed to close passive overlay: $error',
-                  );
-                }
-              }
-
-              return;
-            }
-
-            try {
-              final active =
-              await FlutterOverlayWindow
-                  .isActive();
-
-              if (hasActiveWarning()) {
-                if (!active) {
-                  final now =
-                  DateTime.now();
-
-                  if (now
-                      .difference(
-                    lastOverlayTime,
-                  )
-                      .inSeconds >=
-                      1) {
-                    await FlutterOverlayWindow
-                        .showOverlay(
-                      height: 1800,
-                      width: 1200,
-                      alignment:
-                      OverlayAlignment.center,
-                      flag:
-                      OverlayFlag.clickThrough,
-                      visibility:
-                      NotificationVisibility
-                          .visibilityPublic,
-                      positionGravity:
-                      PositionGravity.auto,
-                    );
-
-                    lastOverlayTime = now;
-                  }
-                }
-
-                if (await FlutterOverlayWindow
-                    .isActive()) {
-                  await FlutterOverlayWindow
-                      .shareData(snapshot);
-                }
-              } else if (active) {
-                await FlutterOverlayWindow
-                    .shareData(snapshot);
-
-                await Future<void>.delayed(
-                  const Duration(
-                    milliseconds: 100,
-                  ),
-                );
-
-                if (hasNoActiveWarning() &&
-                    !nsfwOverlayActive &&
-                    await FlutterOverlayWindow
-                        .isActive()) {
-                  await FlutterOverlayWindow
-                      .closeOverlay();
-                }
-              }
-            } catch (error) {
-              debugPrint(
-                '[BackgroundService] '
-                    'Overlay update failed: $error',
-              );
-            }
-          },
-        );
-  }
 
   // ==========================================================================
   // OVERLAY FLAG
@@ -887,6 +889,12 @@ void onStart(
 
     pushTimer?.cancel();
     emailTimer?.cancel();
+    postureDetectionWatchdog?.cancel();
+    postureDetectionWatchdog = null;
+    for (final timer in pendingOverlayTimers.values) {
+      timer?.cancel();
+    }
+    pendingOverlayTimers.clear();
 
     syncService.dispose();
 
