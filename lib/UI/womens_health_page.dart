@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+
+import '../backend/womens_health_share_service.dart';
+import 'womens_health_sharing_card.dart';
 
 class WomensHealthPage extends StatefulWidget {
   const WomensHealthPage({super.key});
@@ -575,6 +580,17 @@ class _WomensHealthPageState extends State<WomensHealthPage> {
           'social_reminder_enabled': socialReminder,
         },
         onConflict: 'user_id',
+      );
+
+      // Send the optional daily mood/pain copy only after the health log
+      // has been successfully written. Email failures are isolated inside
+      // WomensHealthShareService and cannot turn a successful save into a
+      // failed registration.
+      await WomensHealthShareService.sendTodayIfEnabled(
+        userId: userId,
+        date: today,
+        pain: pain,
+        mood: mood,
       );
 
       await _loadHealthData();
@@ -1283,6 +1299,10 @@ class _WomensHealthPageState extends State<WomensHealthPage> {
                       _careCard(),
                       const SizedBox(height: 12),
                       _socialCard(),
+                      const SizedBox(height: 20),
+                      _section('اشتراک‌گذاری'),
+                      const SizedBox(height: 10),
+                      const WomensHealthSharingCard(),
                       const SizedBox(height: 20),
                       _dailyLog(),
                       const SizedBox(height: 12),
