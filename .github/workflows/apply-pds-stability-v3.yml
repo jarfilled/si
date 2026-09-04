@@ -1,0 +1,601 @@
+name: Apply PDS stability v3
+
+on:
+  push:
+    branches: [ui-overhaul-2026-08]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Apply PDS stability changes v3') && !contains(github.event.head_commit.message, 'Remove PDS stability v3 workflow')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-overhaul-2026-08
+          fetch-depth: 1
+
+      - name: Apply Dart changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # ---------------------------------------------------------------
+          # background_service.dart
+          # ---------------------------------------------------------------
+          p = Path('lib/services/background_service.dart')
+          text = p.read_text(encoding='utf-8')
+
+          threshold = "const double _lowLightThresholdLux = 100.0;"
+          timing = """const double _lowLightThresholdLux = 100.0;
+
+          // Visual warnings are intentionally debounced independently from
+          // raw detection, audio, and metrics.
+          const _overlayShowDelay = Duration(milliseconds: 500);
+          const _overlayHideDelay = Duration(milliseconds: 300);
+          const _postureDetectionTimeout = Duration(milliseconds: 1500);"""
+          if '_overlayShowDelay' not in text:
+              if threshold not in text:
+                  raise SystemExit('background_service: threshold marker missing')
+              text = text.replace(threshold, timing, 1)
+
+          state_old = """  bool stopped = false;
+  bool nsfwOverlayActive = false;
+
+  String monitoringMode = 'passive';
+
+  bool monitoringSoundEnabled =
+  true;"""
+          state_new = """  bool stopped = false;
+  bool nsfwOverlayActive = false;
+
+  // True when the camera posture streams cannot currently establish a user.
+  // No posture warning is allowed to survive this state.
+  bool userNotDetected = false;
+
+  DateTime? lastNeckSignalAt;
+  DateTime? lastHunchSignalAt;
+  Timer? postureDetectionWatchdog;
+
+  String monitoringMode = 'passive';
+
+  bool monitoringSoundEnabled =
+  true;"""
+          if 'bool userNotDetected = false;' not in text:
+              if state_old not in text:
+                  raise SystemExit('background_service: service state marker missing')
+              text = text.replace(state_old, state_new, 1)
+
+          overlay_marker = """  final overlayState =
+  <String, dynamic>{"""
+          if 'final pendingOverlayTimers' not in text:
+              insertion = """  // Pending visual transitions. Detection itself remains immediate.
+  final pendingOverlayTimers = <String, Timer?>{};
+
+  void _cancelPendingOverlayTimer(String key) {
+    pendingOverlayTimers[key]?.cancel();
+    pendingOverlayTimers[key] = null;
+  }
+
+  bool _readUserDetected(Map<dynamic, dynamic> data) {
+    const notDetectedKeys = <String>[
+      'userNotDetected',
+      'user_not_detected',
+      'notDetected',
+      'not_detected',
+      'noUser',
+      'no_user',
+    ];
+
+    for (final key in notDetectedKeys) {
+      final value = data[key];
+      if (value is bool) {
+        return !value;
+      }
+    }
+
+    const detectedKeys = <String>[
+      'userDetected',
+      'user_detected',
+      'detected',
+      'personDetected',
+      'person_detected',
+      'poseDetected',
+      'pose_detected',
+      'hasUser',
+      'has_user',
+    ];
+
+    for (final key in detectedKeys) {
+      final value = data[key];
+      if (value is bool) {
+        return value;
+      }
+    }
+
+    final status = data['status']?.toString().trim().toLowerCase();
+    if (status != null) {
+      const lostStatuses = <String>{
+        'not_detected',
+        'not detected',
+        'undetected',
+        'no_user',
+        'no user',
+        'no_person',
+        'no person',
+        'no_pose',
+        'no pose',
+        'lost',
+        'missing',
+      };
+      if (lostStatuses.contains(status)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _clearCameraWarningsForLostUser() {
+    for (final type in const ['neck', 'hunch', 'tooClose']) {
+      updateWarningState(type, false);
+      _cancelPendingOverlayTimer(type);
+      overlayState[type] = false;
+    }
+
+    unawaited(metrics.stop('neck'));
+    unawaited(metrics.stop('hunch'));
+    unawaited(metrics.stop('tooClose'));
+  }
+
+  void _setUserNotDetected(bool value) {
+    if (userNotDetected == value) {
+      return;
+    }
+
+    userNotDetected = value;
+    overlayState['userNotDetected'] = value;
+
+    if (value) {
+      _clearCameraWarningsForLostUser();
+    }
+
+    queueOverlayUpdate();
+  }
+
+  void _startPostureDetectionWatchdog() {
+    postureDetectionWatchdog?.cancel();
+
+    postureDetectionWatchdog = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) {
+        if (stopped) return;
+
+        final now = DateTime.now();
+        final neckStale = lastNeckSignalAt == null ||
+            now.difference(lastNeckSignalAt!) > _postureDetectionTimeout;
+        final hunchStale = lastHunchSignalAt == null ||
+            now.difference(lastHunchSignalAt!) > _postureDetectionTimeout;
+
+        if (neckStale && hunchStale) {
+          _setUserNotDetected(true);
+        }
+      },
+    );
+  }
+
+  void _setOverlayWarningDebounced(String key, bool value) {
+    final current = overlayState[key] == true;
+
+    if (current == value) {
+      _cancelPendingOverlayTimer(key);
+      return;
+    }
+
+    _cancelPendingOverlayTimer(key);
+
+    pendingOverlayTimers[key] = Timer(
+      value ? _overlayShowDelay : _overlayHideDelay,
+      () {
+        pendingOverlayTimers[key] = null;
+
+        if (stopped) return;
+
+        overlayState[key] = value;
+        queueOverlayUpdate();
+      },
+    );
+  }
+
+  final overlayState =
+  <String, dynamic>{"""
+              if overlay_marker not in text:
+                  raise SystemExit('background_service: overlay marker missing')
+              text = text.replace(overlay_marker, insertion, 1)
+
+          if "'userNotDetected': false," not in text:
+              needle = "    'lowLight': false,\n    'wristTilt': 0.0,"
+              repl = "    'lowLight': false,\n    'userNotDetected': false,\n    'wristTilt': 0.0,"
+              if needle not in text:
+                  raise SystemExit('background_service: overlay state fields missing')
+              text = text.replace(needle, repl, 1)
+
+          # Replace setOverlayFlag wholesale.
+          start = text.index('  void setOverlayFlag(')
+          end = text.index('\n  // ==========================================================================\n  // SHUTDOWN', start)
+          new_set_overlay = '''  void setOverlayFlag(
+      String key,
+      bool value, {
+        double? wristTilt,
+        double? hunchRatio,
+        double? lightLux,
+      }) {
+    if (wristTilt != null) {
+      overlayState['wristTilt'] = wristTilt;
+    }
+
+    if (hunchRatio != null) {
+      overlayState['hunchRatio'] = hunchRatio;
+    }
+
+    if (lightLux != null) {
+      overlayState['lightLux'] = lightLux;
+    }
+
+    if (key == 'userNotDetected') {
+      _cancelPendingOverlayTimer(key);
+      overlayState[key] = value;
+      queueOverlayUpdate();
+      return;
+    }
+
+    const warningKeys = <String>{
+      'tooClose',
+      'neck',
+      'wrist',
+      'hunch',
+      'lowLight',
+    };
+
+    if (warningKeys.contains(key)) {
+      _setOverlayWarningDebounced(key, value);
+      return;
+    }
+
+    queueOverlayUpdate();
+  }
+'''
+          text = text[:start] + new_set_overlay + text[end:]
+
+          # Cancel timers during shutdown.
+          if 'postureDetectionWatchdog?.cancel();' not in text:
+              needle = "    pushTimer?.cancel();\n    emailTimer?.cancel();"
+              repl = """    pushTimer?.cancel();
+    emailTimer?.cancel();
+    postureDetectionWatchdog?.cancel();
+
+    for (final timer in pendingOverlayTimers.values) {
+      timer?.cancel();
+    }
+    pendingOverlayTimers.clear();"""
+              if needle not in text:
+                  raise SystemExit('background_service: shutdown timer marker missing')
+              text = text.replace(needle, repl, 1)
+
+          # Add watchdog start.
+          if '_startPostureDetectionWatchdog();' not in text:
+              marker = "  // NETWORK SYNC\n  // ==========================================================================\n\n  syncService.start();"
+              repl = """  // POSTURE DETECTION WATCHDOG
+  // ===========================================================================
+
+  _startPostureDetectionWatchdog();
+
+  // NETWORK SYNC
+  // ===========================================================================
+
+  syncService.start();"""
+              if marker not in text:
+                  raise SystemExit('background_service: network sync marker missing')
+              text = text.replace(marker, repl, 1)
+
+          # Neck stream heartbeat / explicit not-detected handling.
+          neck_old = """          final data =
+          Map<dynamic, dynamic>.from(
+            raw,
+          );
+
+          final status =
+              data['status']
+                  ?.toString()
+                  .toLowerCase() ??
+                  'good';"""
+          neck_new = """          final data =
+          Map<dynamic, dynamic>.from(
+            raw,
+          );
+
+          lastNeckSignalAt = DateTime.now();
+
+          final detected = _readUserDetected(data);
+          if (!detected) {
+            _setUserNotDetected(true);
+            return;
+          }
+
+          if (userNotDetected) {
+            _setUserNotDetected(false);
+          }
+
+          final status =
+              data['status']
+                  ?.toString()
+                  .toLowerCase() ??
+                  'good';"""
+          if 'lastNeckSignalAt = DateTime.now();' not in text:
+              if neck_old not in text:
+                  raise SystemExit('background_service: neck stream marker missing')
+              text = text.replace(neck_old, neck_new, 1)
+
+          # Hunch stream heartbeat / explicit not-detected handling.
+          hunch_old = """          final data =
+          Map<dynamic, dynamic>.from(
+            raw,
+          );
+
+          final isHunching =
+              data['is_hunching'] == true ||"""
+          hunch_new = """          final data =
+          Map<dynamic, dynamic>.from(
+            raw,
+          );
+
+          lastHunchSignalAt = DateTime.now();
+
+          final detected = _readUserDetected(data);
+          if (!detected) {
+            _setUserNotDetected(true);
+            return;
+          }
+
+          if (userNotDetected) {
+            _setUserNotDetected(false);
+          }
+
+          final isHunching =
+              data['is_hunching'] == true ||"""
+          if 'lastHunchSignalAt = DateTime.now();' not in text:
+              if hunch_old not in text:
+                  raise SystemExit('background_service: hunch stream marker missing')
+              text = text.replace(hunch_old, hunch_new, 1)
+
+          # Include user-not-detected in both regular status payload shapes.
+          if "'userNotDetected':\n              userNotDetected," not in text:
+              needle = """              'monitoringSoundEnabled':
+              monitoringSoundEnabled,
+            },"""
+              repl = """              'monitoringSoundEnabled':
+              monitoringSoundEnabled,
+
+              'userNotDetected':
+              userNotDetected,
+            },"""
+              text = text.replace(needle, repl, 1)
+
+          if "'userNotDetected':\n          userNotDetected," not in text:
+              needle = """          'monitoringSoundEnabled':
+          monitoringSoundEnabled,
+        },"""
+              repl = """          'monitoringSoundEnabled':
+          monitoringSoundEnabled,
+
+          'userNotDetected':
+          userNotDetected,
+        },"""
+              text = text.replace(needle, repl, 1)
+
+          p.write_text(text, encoding='utf-8')
+
+          # ---------------------------------------------------------------
+          # dashboard.dart -- PDS ON by default, respecting explicit OFF
+          # ---------------------------------------------------------------
+          p = Path('lib/UI/dashboard.dart')
+          text = p.read_text(encoding='utf-8')
+
+          if "import 'package:flutter/services.dart';" not in text:
+              text = text.replace(
+                  "import 'dart:async';\n",
+                  "import 'dart:async';\n\nimport 'package:flutter/services.dart';\n",
+                  1,
+              )
+
+          if "../services/app_permission_manager.dart" not in text:
+              text = text.replace(
+                  "import '../services/background_service.dart';\n",
+                  "import '../services/app_permission_manager.dart';\nimport '../services/background_service.dart';\n",
+                  1,
+              )
+
+          if "static const _cameraChannel = 'com.s_health/camera_control';" not in text:
+              marker = "  static const Color subtext = Color(0xFF7D8D89);\n"
+              if marker not in text:
+                  raise SystemExit('dashboard: color marker missing')
+              text = text.replace(
+                  marker,
+                  marker + "  static const _cameraChannel = 'com.s_health/camera_control';\n",
+                  1,
+              )
+
+          if '_ensureDefaultMonitoring();' not in text:
+              needle = """    _listenToService();
+    _refreshMonitoringState();"""
+              repl = """    _listenToService();
+    _refreshMonitoringState();
+    _ensureDefaultMonitoring();"""
+              if needle not in text:
+                  raise SystemExit('dashboard: init marker missing')
+              text = text.replace(needle, repl, 1)
+
+          if 'Future<void> _ensureDefaultMonitoring() async' not in text:
+              marker = "  void _goTo(int index) {"
+              helper = r'''  Future<void> _ensureDefaultMonitoring() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+
+      // A missing value means the user has never chosen a setting.
+      // An explicit false is always respected.
+      final configured = prefs.getBool('monitoring_enabled');
+      if (configured == false) {
+        return;
+      }
+
+      final divisor = prefs.getDouble('hunch_divisor');
+      if (divisor == null || !divisor.isFinite || divisor <= 0) {
+        return;
+      }
+
+      if (await BackgroundMonitorService.isRunning) {
+        return;
+      }
+
+      final granted =
+          await AppPermissionManager.ensureMonitoringPermissions();
+      if (!granted) {
+        return;
+      }
+
+      const channel = MethodChannel(_cameraChannel);
+
+      await channel.invokeMethod(
+        'saveHunchDivisor',
+        {'hunch_divisor': divisor},
+      );
+
+      await channel.invokeMethod(
+        'startCamera',
+        {'hunch_divisor': divisor},
+      );
+
+      await BackgroundMonitorService.initialize();
+      BackgroundMonitorService.start();
+
+      await prefs.setBool('monitoring_enabled', true);
+
+      if (mounted) {
+        setState(() {
+          serviceAlive = true;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[Dashboard] Default PDS startup failed: $e',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+'''
+              if marker not in text:
+                  raise SystemExit('dashboard: insertion marker missing')
+              text = text.replace(marker, helper + marker, 1)
+
+          p.write_text(text, encoding='utf-8')
+
+          # ---------------------------------------------------------------
+          # settings_page.dart -- default UI state follows new PDS default
+          # ---------------------------------------------------------------
+          p = Path('lib/UI/settings_page.dart')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace(
+              "prefs.getBool('monitoring_enabled') ?? false",
+              "prefs.getBool('monitoring_enabled') ?? true",
+              1,
+          )
+          p.write_text(text, encoding='utf-8')
+
+          # ---------------------------------------------------------------
+          # main.dart -- dedicated user-not-detected HUD icon
+          # ---------------------------------------------------------------
+          p = Path('lib/main.dart')
+          text = p.read_text(encoding='utf-8')
+
+          if 'bool _showUserNotDetected = false;' not in text:
+              marker = "  bool _showLowLight = false;\n"
+              if marker not in text:
+                  raise SystemExit('main: overlay state marker missing')
+              text = text.replace(
+                  marker,
+                  marker + "  bool _showUserNotDetected = false;\n",
+                  1,
+              )
+
+          if "_showUserNotDetected = readBool('userNotDetected');" not in text:
+              marker = "          _showLowLight = readBool('lowLight') || readBool('lowLightPoor');\n"
+              if marker not in text:
+                  raise SystemExit('main: overlay listener marker missing')
+              text = text.replace(
+                  marker,
+                  marker + "          _showUserNotDetected = readBool('userNotDetected');\n",
+                  1,
+              )
+
+          if 'Icons.person_off_outlined' not in text:
+              marker = """                    if (_showWrist)
+                      _indicatorCircle(Icons.pan_tool, Colors.purple),
+"""
+              replacement = """                    if (_showWrist)
+                      _indicatorCircle(Icons.pan_tool, Colors.purple),
+                    if (_showUserNotDetected)
+                      _indicatorCircle(
+                        Icons.person_off_outlined,
+                        Colors.blueGrey,
+                      ),
+"""
+              if marker not in text:
+                  raise SystemExit('main: indicator marker missing')
+              text = text.replace(marker, replacement, 1)
+
+          # Reset the icon when overlay data is explicitly cleared.
+          marker = """            _showHunch = false;
+            _showLowLight = false;
+          });"""
+          replacement = """            _showHunch = false;
+            _showLowLight = false;
+            _showUserNotDetected = false;
+          });"""
+          if marker in text and '_showUserNotDetected = false;' not in text[text.index(marker):text.index(marker)+250]:
+              text = text.replace(marker, replacement, 1)
+
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify changes
+        shell: bash
+        run: |
+          grep -q "_overlayShowDelay = Duration(milliseconds: 500)" lib/services/background_service.dart
+          grep -q "bool userNotDetected = false" lib/services/background_service.dart
+          grep -q "_startPostureDetectionWatchdog();" lib/services/background_service.dart
+          grep -q "lastNeckSignalAt = DateTime.now()" lib/services/background_service.dart
+          grep -q "lastHunchSignalAt = DateTime.now()" lib/services/background_service.dart
+          grep -q "_setOverlayWarningDebounced" lib/services/background_service.dart
+          grep -q "Future<void> _ensureDefaultMonitoring() async" lib/UI/dashboard.dart
+          grep -q "_ensureDefaultMonitoring();" lib/UI/dashboard.dart
+          grep -q "Icons.person_off_outlined" lib/main.dart
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib/services/background_service.dart lib/UI/dashboard.dart lib/UI/settings_page.dart lib/main.dart
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
+          git commit -m 'Apply PDS stability changes v3'
+          git push origin ui-overhaul-2026-08
+
+          git rm .github/workflows/apply-pds-stability-v3.yml
+          git commit -m 'Remove PDS stability v3 workflow'
+          git push origin ui-overhaul-2026-08
