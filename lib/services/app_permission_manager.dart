@@ -53,6 +53,24 @@ class AppPermissionManager {
     return granted;
   }
 
+  static Future<bool> ensureNotificationPermission() async {
+    final notification = await Permission.notification.request();
+
+    debugPrint(
+      '[Permissions] Notification permission: $notification',
+    );
+
+    if (!notification.isGranted) {
+      if (notification.isPermanentlyDenied ||
+          notification.isRestricted) {
+        await openAppSettings();
+      }
+      return false;
+    }
+
+    return true;
+  }
+
   static Future<bool> ensureMicrophonePermission() async {
     final microphone =
         await Permission.microphone.request();
