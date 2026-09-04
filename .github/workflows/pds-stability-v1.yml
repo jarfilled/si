@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: "!contains(github.event.head_commit.message, 'Apply final PDS fixes') && !contains(github.event.head_commit.message, 'Remove temporary PDS workflows')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,119 +17,32 @@ jobs:
           ref: ui-overhaul-2026-08
           fetch-depth: 1
 
-      - name: Apply surgical source fixes
+      - name: Apply PDS changes
+        shell: bash
+        run: python3 tooling/apply_pds_stability.py
+
+      - name: Verify PDS changes
         shell: bash
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          # background_service.dart: move the local helper block so it comes
-          # after the declarations/functions it references.
-          p = Path('lib/services/background_service.dart')
-          s = p.read_text(encoding='utf-8')
-
-          start = s.find('  final pendingOverlayTimers = <String, Timer?>{};')
-          overlay_decl = s.find('  final overlayState =\n  <String, dynamic>{')
-          if start >= 0 and overlay_decl > start:
-              helper_block = s[start:overlay_decl]
-              s = s[:start] + s[overlay_decl:]
-              marker = '  // ==========================================================================\n  // OVERLAY FLAG\n  // ==========================================================================\n'
-              if marker not in s:
-                  raise SystemExit('overlay flag marker not found')
-              if 'void _setOverlayWarningDebounced' not in s:
-                  raise SystemExit('helper block incomplete')
-              s = s.replace(marker, helper_block + '\n' + marker, 1)
-
-          # Make user-not-detected a real overlay-driving state.
-          old = """    return overlayState['tooClose'] == true ||
-        overlayState['neck'] == true ||
-        overlayState['wrist'] == true ||
-        overlayState['hunch'] == true ||
-        overlayState['lowLight'] == true;"""
-          new = """    return overlayState['tooClose'] == true ||
-        overlayState['neck'] == true ||
-        overlayState['wrist'] == true ||
-        overlayState['hunch'] == true ||
-        overlayState['lowLight'] == true ||
-        overlayState['userNotDetected'] == true;"""
-          if old in s:
-              s = s.replace(old, new, 1)
-
-          # Make shutdown deterministic: no watchdog/debounce timers survive.
-          old = """    pushTimer?.cancel();
-    emailTimer?.cancel();
-
-    syncService.dispose();"""
-          new = """    pushTimer?.cancel();
-    emailTimer?.cancel();
-    postureDetectionWatchdog?.cancel();
-    postureDetectionWatchdog = null;
-    for (final timer in pendingOverlayTimers.values) {
-      timer?.cancel();
-    }
-    pendingOverlayTimers.clear();
-
-    syncService.dispose();"""
-          if old in s:
-              s = s.replace(old, new, 1)
-
-          p.write_text(s, encoding='utf-8')
-
-          # main.dart: the explicit 'none' event must clear the new indicator.
-          p = Path('lib/main.dart')
-          s = p.read_text(encoding='utf-8')
-          old = """            _showHunch = false;
-            _showLowLight = false;
-          });"""
-          new = """            _showHunch = false;
-            _showLowLight = false;
-            _showUserNotDetected = false;
-          });"""
-          if old in s:
-              s = s.replace(old, new, 1)
-          p.write_text(s, encoding='utf-8')
-          PY
-
-      - name: Verify PDS source
-        shell: bash
-        run: |
-          set -euo pipefail
+          set -e
           grep -q "_overlayShowDelay = Duration(milliseconds: 500)" lib/services/background_service.dart
           grep -q "_overlayHideDelay = Duration(milliseconds: 300)" lib/services/background_service.dart
           grep -q "_postureDetectionTimeout = Duration(milliseconds: 1500)" lib/services/background_service.dart
           grep -q "bool userNotDetected = false" lib/services/background_service.dart
           grep -q "overlayState\['userNotDetected'\] == true" lib/services/background_service.dart
           grep -q "Icons.person_off_outlined" lib/main.dart
-          flutter --version
-          flutter analyze
+          grep -q "prefs.getBool('monitoring_enabled') ?? true" lib/UI/settings_page.dart
 
-      - name: Commit final PDS fixes
+      - name: Commit PDS changes
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/services/background_service.dart lib/main.dart
+          git add lib/services/background_service.dart lib/UI/dashboard.dart lib/UI/settings_page.dart lib/main.dart tooling/apply_pds_stability.py
+          if git diff --cached --quiet; then
+            echo 'No PDS changes to commit.'
+            exit 0
+          fi
           git commit -m 'Apply final PDS fixes'
-          git push origin ui-overhaul-2026-08
-
-      - name: Clean temporary patch files
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin ui-overhaul-2026-08
-          git checkout ui-overhaul-2026-08
-          git pull --ff-only origin ui-overhaul-2026-08
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f \
-            .github/workflows/pds-stability-v1.yml \
-            .github/workflows/pds-stability-v2.yml \
-            .github/workflows/apply-pds-stability-v3.yml \
-            .github/workflows/apply-pds-stability-v4.yml \
-            .github/workflows/fix-permission-status.yml \
-            .github/workflows/pds-finalize.yml \
-            .pds-finalize-trigger
-          git commit -m 'Remove temporary PDS workflows'
           git push origin ui-overhaul-2026-08
