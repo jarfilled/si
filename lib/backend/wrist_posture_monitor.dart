@@ -1,4 +1,3 @@
-// lib/backend/wrist_posture_monitor.dart
 
 import 'dart:async';
 import 'dart:math';
@@ -143,3 +142,5 @@ class WristPostureMonitor {
     await _stateController.close();
   }
 }
+
+

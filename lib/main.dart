@@ -13,7 +13,6 @@ import 'package:monitor/UI/onBoarding.dart';
 import 'package:monitor/UI/signup_page.dart';
 import 'package:monitor/UI/splashScreen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'cam_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -429,7 +428,6 @@ class MyApp extends StatelessWidget {
       routes: {
         '/signup': (_) => const SignupPage(),
         '/login': (_) => LoginPage(),
-        '/cam': (_) => CamScreen(cameras: cameras),
         '/calibrate': (_) => CalibrationScreen(cameras: cameras),
         '/dashboard': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
