@@ -1,10 +1,20 @@
 import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server/gmail.dart';
 import 'metrics_manager.dart';
+import 'package:mailer/smtp_server.dart';
 
 class EmailReporter {
+  static const String _smtpUsername = 'cthehealthcareapp@gmail.com';
+  static const String _smtpPassword = 'awqt yrce crlv bamo';
+
+  static SmtpServer get smtpServer =>
+      gmail(_smtpUsername, _smtpPassword);
+
+  static Address get senderAddress =>
+      Address(_smtpUsername, 'C');
+
   static Future<void> sendDailyReport(String userEmail) async {
     final metrics = MetricsManager().getDailyReport();
+
     final buffer = StringBuffer()
       ..writeln("سلام 👋")
       ..writeln("گزارش وضعیت بدن شما امروز:")
@@ -12,17 +22,15 @@ class EmailReporter {
 
     metrics.forEach((key, duration) {
       buffer.writeln(
-          "- ${_translateKey(key)}: ${duration.inMinutes} دقیقه در وضعیت نادرست");
+        "- ${_translateKey(key)}: ${duration.inMinutes} دقیقه در وضعیت نادرست",
+      );
     });
 
     final message = Message()
-      ..from = Address('cthehealthcareapp@gmail.com', 'C')
+      ..from = senderAddress
       ..recipients.add(userEmail)
       ..subject = 'گزارش سلامت روزانه شما'
       ..text = buffer.toString();
-
-    final smtpServer =
-        gmail('cthehealthcareapp@gmail.com', 'awqt yrce crlv bamo');
 
     try {
       await send(message, smtpServer);

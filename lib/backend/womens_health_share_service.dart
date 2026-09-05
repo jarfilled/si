@@ -1,17 +1,10 @@
 import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server/gmail.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'email_reporter.dart';
 
 class WomensHealthShareService {
   static final SupabaseClient _supabase = Supabase.instance.client;
-
-  // Keep the sender credentials out of source control. Build the app with:
-  // --dart-define=WOMENS_HEALTH_SMTP_USER=...
-  // --dart-define=WOMENS_HEALTH_SMTP_PASSWORD=...
-  static const _smtpUser =
-      String.fromEnvironment('WOMENS_HEALTH_SMTP_USER');
-  static const _smtpPassword =
-      String.fromEnvironment('WOMENS_HEALTH_SMTP_PASSWORD');
 
   static Future<void> sendTodayIfEnabled({
     required String userId,
@@ -19,13 +12,6 @@ class WomensHealthShareService {
     required int pain,
     required int mood,
   }) async {
-    if (_smtpUser.isEmpty || _smtpPassword.isEmpty) {
-      print(
-        '⚠️ Womens health sharing is not configured: SMTP credentials are missing.',
-      );
-      return;
-    }
-
     try {
       final response = await _supabase
           .from('womens_health_email_contacts')
@@ -36,6 +22,7 @@ class WomensHealthShareService {
       final contacts = List<Map<String, dynamic>>.from(response);
 
       if (contacts.isEmpty) {
+        print("[WomensHealthSharing] No enabled contacts found.");
         return;
       }
 
@@ -43,8 +30,6 @@ class WomensHealthShareService {
           '${date.year.toString().padLeft(4, '0')}-'
           '${date.month.toString().padLeft(2, '0')}-'
           '${date.day.toString().padLeft(2, '0')}';
-
-      final smtpServer = gmail(_smtpUser, _smtpPassword);
 
       for (final contact in contacts) {
         final email = contact['email']?.toString().trim();
@@ -63,11 +48,14 @@ class WomensHealthShareService {
             .limit(1);
 
         if (existing.isNotEmpty) {
+          print(
+            "[WomensHealthSharing] Already sent to $email for $dateString.",
+          );
           continue;
         }
 
         final message = Message()
-          ..from = Address(_smtpUser, 'C')
+          ..from = EmailReporter.senderAddress
           ..recipients.add(
             Address(
               email,
@@ -83,25 +71,32 @@ class WomensHealthShareService {
           );
 
         try {
-          await send(message, smtpServer);
+          await send(
+            message,
+            EmailReporter.smtpServer,
+          );
 
-          await _supabase.from('womens_health_email_deliveries').insert({
+          await _supabase
+              .from('womens_health_email_deliveries')
+              .insert({
             'user_id': userId,
             'contact_email': email,
             'log_date': dateString,
           });
 
-          print("✅ Women's health report sent to $email");
+          print(
+            "[WomensHealthSharing] ✅ Report sent to $email",
+          );
         } catch (e) {
-          // A failed delivery is not recorded, so another registration can
-          // retry the email later that day.
-          print("❌ Failed to send women's health report to $email: $e");
+          print(
+            "[WomensHealthSharing] ❌ Failed to send to $email: $e",
+          );
         }
       }
     } catch (e) {
-      // Sharing is supplementary. A lookup/mail failure must never make an
-      // otherwise successful daily health registration fail.
-      print('❌ Womens health sharing failed: $e');
+      print(
+        "[WomensHealthSharing] ❌ Sharing failed: $e",
+      );
     }
   }
 
@@ -116,15 +111,21 @@ class WomensHealthShareService {
         : 'سلام ${recipientName.trim()}';
 
     final buffer = StringBuffer();
+
     buffer.writeln(greeting);
     buffer.writeln();
     buffer.writeln('گزارش روزانه سلامت زنان');
     buffer.writeln(
-      'تاریخ: ${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}',
+      'تاریخ: '
+          '${date.year}/'
+          '${date.month.toString().padLeft(2, '0')}/'
+          '${date.day.toString().padLeft(2, '0')}',
     );
     buffer.writeln();
     buffer.writeln('میزان درد: $pain از ۱۰');
-    buffer.writeln('خلق‌وخو: $mood از ۵ (${_moodLabel(mood)})');
+    buffer.writeln(
+      'خلق‌وخو: $mood از ۵ (${_moodLabel(mood)})',
+    );
     buffer.writeln();
     buffer.writeln(
       'این گزارش با اجازه کاربر و از داخل اپ سی ثبت و ارسال شده است.',
